@@ -53,6 +53,12 @@ apt-get -q=2 upgrade 2>&1 | tee -a ./install.log
 echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Installing rsync" | tee -a ./install.log
 apt-get -q=2 install rsync 2>&1 | tee -a ./install.log
 
-echo "[INFO] Copying the main script into /usr/bin"
-echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Copying the main script into /usr/bin" >> ./install.log
+echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Copying the main script into /usr/bin" | tee -a ./install.log
+cp ./minibak.sh /usr/bin/minibak 2>&1 | tee -a ./install.log
+if [[ $? -ne 0 ]]
+	then
+		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." | tee -a ./install.log
+		exit 1
+fi
+
 
