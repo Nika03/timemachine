@@ -45,7 +45,16 @@ echo "$text_intro" >> ./install.log
 echo "" >> ./install.log
 
 echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Performing <apt-get update>" | tee -a ./install.log
-apt-get -q=2 update 2>&1 | tee -a ./install.log
+set -o pipefail		# this enables pipefail, which will make the exit status of a pipeline the code of whatever failed
+			# without this, the exit status of whatever was last (utmost right) will be returned
+if ! apt-get -q=2 -o APT::Update::Error-Mode=any update 2>&1 | tee -a ./install.log
+	then
+		aptStatus=$?
+		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] apt-get update failed with status $aptStatus" | tee -a ./install.log
+		exit $aptStatus
+fi
+
+set +o pipefail		# this disables pipefail
 
 echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Performing <apt-get upgrade>" | tee -a ./install.log
 apt-get -q=2 upgrade 2>&1 | tee -a ./install.log
