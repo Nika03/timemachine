@@ -2,20 +2,19 @@
 
 # begin code section where the vars with initial data are declared
 
-dir_src=""				# source data to backup
-dir_dest=""				# destination where the data will be backed up
-bool_verboseMode=0			# talk to me baby
-bool_schedulerEnabled=0			# enable/disable scheduled execs
-dir_log="/var/log"			# default directory for log files
-dir_defaultConfig="/etc"		# default config dir
-# todo - an array that stores hours of the day when a scheduled exec should happen
+	dir_src=""				# source data to backup
+	dir_dest=""				# destination where the data will be backed up
+	bool_verboseMode=0			# talk to me baby
+	bool_schedulerEnabled=0			# enable/disable scheduled execs
+	dir_log="/var/log"			# default directory for log files
+	dir_defaultConfig="/etc"		# default config dir
+	# todo - an array that stores hours of the day when a scheduled exec should happen
 
 # end code section with vars containing init data
 
 
 # begin code section that declares vars containing user facing information
 
-# i think making vars for each text is a lot nicer to edit down the line instead of hardcoding it in and having to search for it
 read -d '' text_help << EOT
 
 Usage: $0 [ options ]
@@ -34,7 +33,6 @@ Options:
  
 EOT
 
-
 read -d '' text_configHelp << EOT
 
 Configuration file is the alternative to the options of the script.
@@ -49,23 +47,10 @@ dir_log=<dir>			Directory where the logs will be saved. By default, it's /var/lo
  
 EOT
 
-
-text_defaultConfigMissing="The default config $defaultConfig/minibak.conf does not exist! - Exiting..."
-
-text_configLocationEmpty="The argument containing the location of the configuration file is empty!"
-
-
 read -d '' text_configErrorInfo << EOT
 Please insert the location of a valid configuration file, for example <-c ~/my-minibak-config.conf>
 or use <-c default> to use the default file $defaultConfig/minibak.conf
 EOT
-
-
-text_dirSrcStringEmpty="No directory to be backed up has been provided - Exiting..."
-
-text_srcDirMissing="Source directory <$dir_src> does not exit! - Exiting..."
-
-text_customConfigMissing="The config file in the provided location does not exist! Location:"
 
 # end code section with vars for user facing information
 
@@ -110,7 +95,7 @@ while getopts ":s:d:vh:c:" flag; do
 							fi
 						else
 							# default config file does not exist -> error
-							echo "$0 ERROR: $text_defaultConfigMissing" >&2
+							echo "$0 ERROR: The default config $defaultConfig/minibak.conf does not exist! - Exiting..." >&2
 							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Default configuration file is missing. Exit code 1." >> /tmp/minibak.log
 							exit 1
 					fi
@@ -119,7 +104,7 @@ while getopts ":s:d:vh:c:" flag; do
 						then
 							# if its empty -> error
 							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Arg $OPTARG set for option -c" >> /tmp/minibak.log
-							echo "$0 ERROR: $text_configLocationEmpty" >&2
+							echo "$0 ERROR: The argument containing the location of the configuration file is empty!" >&2
 							echo "$text_configErrorInfo" >&2
 							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Config in $OPTARG not found. Exit code 1" >> /tmp/minibak.log
 							exit 1
@@ -130,20 +115,20 @@ while getopts ":s:d:vh:c:" flag; do
 									# if exists, import the values for vars from config
 									source $OPTARG
 
-		                                                	if [[ -d $dir_log ]]
-                		                                        	then
-                                		                                	cat /tmp/minibak.log >> $dir_log/minibak.log
-                                                		                	rm /tmp/minibak.log
-		                                                        	else
-                		                                                	echo "Warning: Set log directory doesn't exist, setting the log directory to /var/log"
-                                		                                	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Provided log directory doesn't exist, dir_log will be set to /var/log" >> /tmp/minibak.log
-                                                		                	dir_log="/var/log"
-                                                                			cat /tmp/minibak.log >> $dir_log/minibak.log
-                                                               				rm /tmp/minibak.log
-                                                			fi
+									if [[ -d $dir_log ]]
+										then
+											cat /tmp/minibak.log >> $dir_log/minibak.log
+											rm /tmp/minibak.log
+										else
+											echo "Warning: Set log directory doesn't exist, setting the log directory to /var/log"
+											echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Provided log directory doesn't exist, dir_log will be set to /var/log" >> /tmp/minibak.log
+											dir_log="/var/log"
+											cat /tmp/minibak.log >> $dir_log/minibak.log
+											rm /tmp/minibak.log
+									fi
 								else
 									# config file doesn't exit
-									echo "$text_customConfigMissing $OPTARG - Exiting..." >&2
+									echo "The config file in the provided location does not exist in location $OPTARG! - Exiting..." >&2
 									echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Custom configuration file doesn't exist. Exit code 1." >> /tmp/minibak.log
 									exit 1
 							fi
@@ -156,7 +141,7 @@ done
 if [[ -z $dir_src ]]
 	then
 		# source string empty
-		echo "Error: $text_dirSrcStringEmpty" >&2
+		echo "Error: No directory to be backed up has been provided - Exiting..." >&2
 		echo "$text_help" >&2
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Source directory string is empty. Exit code 1" >> $dir_log/minibak.log
 		exit 1
@@ -173,7 +158,7 @@ if [[ -z $dir_src ]]
 			fi
 	else
 		# source dir doesn't exist
-		echo "$text_srcDirMissing" >&2
+		echo "Source directory <$dir_src> does not exit! - Exiting..." >&2
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Source directory doesn't exist. Exit code 1" >> $dir_log/minibak.log
 		exit 1
 fi
@@ -207,51 +192,56 @@ lastBackup=$(find $dir_dest -mindepth 1 -maxdepth 1 | sort -r | head -n 1)
 
 #mkdir $currentBackupDir
 
+func_rsyncExitCode() 
+{
+	case $1 in
+		0) echo "Success: Backup performed successfully"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Backup job completed successfully. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		1) echo "Failure: Syntax or usage error"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Syntax or usage error within the script. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		2) echo "Failure: Protocol incompatibility"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Protocol incompatibility. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		3) echo "Failure: Errors selecting input/output files, directories, or permissions"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Errors selecting input/output files, directories, or permissions. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		4) echo "Failure: Requested action not supported"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Requested action not supported. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		5) echo "Failure: Error starting the client-server protocol"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Error starting the client-server protocol. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		6) echo "Failure: Daemon unable to append to log file"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Daemon unable to append to log file. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		10) echo "Failure: Socket I/O error"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Socket I/O error. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		11) echo "Failure: File I/O error"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] File I/O error. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		12) echo "Failure: Error in rsync protocol data stream"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Error in rsync protocol data stream. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		13) echo "Failure: Errors with diagnostics"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Errors with diagnostics. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		14) echo "Failure: Error in IPC code"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Error in IPC code. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		20) echo "Failure: Received SIGUSR1 or SIGINT"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Received SIGUSR1 or SIGINT. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		23) echo "Failure: Partial transfer due to error"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Partial transfer due to error. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		24) echo "Failure: Partial transfer due to vanished source files"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Partial transfer due to vanished source files. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		30) echo "Failure: Timeout in data send/receive"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Timeout in data send/receive. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		35) echo "Failure: Timeout waiting for daemon connection"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Timeout waiting for daemon connection. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+		\?) echo "Failure: An unlisted error has occurred. rsync quit with error code $1"
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Unlisted error occurred. rsync quit with exit code $1" >> $dir_log/minibak.log ;;
+	esac
+}
+
 if [[ -z "$(ls $dir_dest)" ]]
 	then
 		echo "No previous backups found"
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] No previous backups found" >> $dir_log/minibak.log
 		mkdir $currentBackupDir
 		rsync -aH $dir_src $currentBackupDir
-		rsyncExitCode=$?
-		case $rsyncExitCode in
-			0) echo "Success: Backup performed successfully"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Backup job completed successfully. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			1) echo "Failure: Syntax or usage error"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Syntax or usage error within the script. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			2) echo "Failure: Protocol incompatibility"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Protocol incompatibility. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			3) echo "Failure: Errors selecting input/output files, directories, or permissions"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Errors selecting input/output files, directories, or permissions. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			4) echo "Failure: Requested action not supported"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Requested action not supported. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			5) echo "Failure: Error starting the client-server protocol"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Error starting the client-server protocol. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			6) echo "Failure: Daemon unable to append to log file"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Daemon unable to append to log file. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			10) echo "Failure: Socket I/O error"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Socket I/O error. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			11) echo "Failure: File I/O error"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] File I/O error. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			12) echo "Failure: Error in rsync protocol data stream"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Error in rsync protocol data stream. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			13) echo "Failure: Errors with diagnostics"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Errors with diagnostics. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			14) echo "Failure: Error in IPC code"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Error in IPC code. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			20) echo "Failure: Received SIGUSR1 or SIGINT"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Received SIGUSR1 or SIGINT. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			23) echo "Failure: Partial transfer due to error"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Partial transfer due to error. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			24) echo "Failure: Partial transfer due to vanished source files"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Partial transfer due to vanished source files. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			30) echo "Failure: Timeout in data send/receive"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Timeout in data send/receive. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			35) echo "Failure: Timeout waiting for daemon connection"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Timeout waiting for daemon connection. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-			\?) echo "Failure: An unlisted error has occurred. rsync quit with error code $rsyncExitCode"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Unlisted error occurred. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-		esac
+		func_rsyncExitCode "$?"
+		
 	else
 		# find last latest backup and set that as the --link-dest
 		echo "Searching for last latest backup to compare with latest changes"
@@ -260,46 +250,7 @@ if [[ -z "$(ls $dir_dest)" ]]
 		echo "currentBackupDir = $currentBackupDir"
 		mkdir $currentBackupDir
 		rsync -aHv --link-dest=$lastBackup $dir_src $currentBackupDir
-		rsyncExitCode=$?
-                case $rsyncExitCode in
-                        0) echo "Success: Backup performed successfully"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Backup job completed successfully. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        1) echo "Failure: Syntax or usage error"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Syntax or usage error within the script. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        2) echo "Failure: Protocol incompatibility"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Protocol incompatibility. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        3) echo "Failure: Errors selecting input/output files, directories, or permissions"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Errors selecting input/output files, directories, or permissions. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        4) echo "Failure: Requested action not supported"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Requested action not supported. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        5) echo "Failure: Error starting the client-server protocol"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Error starting the client-server protocol. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        6) echo "Failure: Daemon unable to append to log file"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Daemon unable to append to log file. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        10) echo "Failure: Socket I/O error"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Socket I/O error. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        11) echo "Failure: File I/O error"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] File I/O error. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        12) echo "Failure: Error in rsync protocol data stream"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Error in rsync protocol data stream. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        13) echo "Failure: Errors with diagnostics"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Errors with diagnostics. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        14) echo "Failure: Error in IPC code"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Error in IPC code. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        20) echo "Failure: Received SIGUSR1 or SIGINT"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Received SIGUSR1 or SIGINT. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        23) echo "Failure: Partial transfer due to error"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Partial transfer due to error. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        24) echo "Failure: Partial transfer due to vanished source files"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Partial transfer due to vanished source files. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        30) echo "Failure: Timeout in data send/receive"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Timeout in data send/receive. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        35) echo "Failure: Timeout waiting for daemon connection"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Timeout waiting for daemon connection. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                        \?) echo "Failure: An unlisted error has occurred. rsync quit with error code $rsyncExitCode"
-                                echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Unlisted error occurred. rsync quit with exit code $rsyncExitCode" >> $dir_log/minibak.log ;;
-                esac
-
+		func_rsyncExitCode "$?"
 fi
 
 #if [[ "$bool_verboseMode" -eq 1 ]]
