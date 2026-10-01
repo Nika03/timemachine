@@ -27,6 +27,9 @@ Changes that are not done by the installer but the main script:
 - Save log data into /var/log by default
 - Make changes to the systemd service and timer per user wish
 
+Changes made by the installer can be reverted by invoking this script with "uninstall" argument:
+./install.sh uninstall
+
 EOT
 
 set -e
@@ -70,4 +73,43 @@ if [[ $? -ne 0 ]]
 		exit 1
 fi
 
+echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Copying the config into /etc/minibak.conf" | tee -a ./install.log
+cp ./conf /etc/minibak.conf 2>&1 | tee -a ./install.log
+if [[ $? -ne 0 ]]
+	then
+		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." | tee -a ./install.log
+		exit 1
+fi
 
+echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Copying the config template into /etc/minibak.conf.template" | tee -a ./install.log
+cp ./conf /etc/minibak.conf.template 2>&1 | tee -a ./install.log
+if [[ $? -ne 0 ]]
+	then
+		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." | tee -a ./install.log
+		exit 1
+fi
+
+sudo cat > /etc/systemd/system/minibak.service << EOT
+[Unit]
+Description=Execute Minibak
+
+[Service]
+Type=oneshot
+ExecStart='/usr/bin/minibak -c /etc/minibak.conf'
+EOT
+
+# OnCalendar=DayOfWeek Year-Month-Day Hour:Minute:Second
+# OnCalendar can be called multiple times 
+sudo cat > /etc/systemd/system/minibak.timer << EOT
+[Unit]
+Description=Execute Minibak during specified times
+
+[Timer]
+OnCalendar=Mon..Sun *-*-* 00:00:00
+OnCalendar=Mon..Sun *-*-* 12:00:00
+Unit=minibak.service
+Persistent=false
+
+[Install]
+WantedBy=timers.target
+EOT
