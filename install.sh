@@ -55,18 +55,22 @@ Removal of rsync and other miscellaneous files left by the scripts is in form of
 
 EOT
 
+# pipefail is on for the whole script, so a pipe into tee reports the failure of the command before it, not of tee
 set -o pipefail		# this enables pipefail, which will make the exit status of a pipeline the code of whatever failed
 			# without this, the exit status of whatever was last (utmost right) will be returned
 
+# arg1 decides what happens: "uninstall" -> removal, anything else (or nothing) -> installation
 if [[ -z $1 || $1 != "uninstall" ]]
 	then 	# do installation
 		echo "$text_introInstallation"
 
+		# read inside $( ) so the answer ends up in the comparison, anything but a literal "y" aborts
 		if [[ $(read -r -p "Would you like to continue? (y/n) : " x; echo $x)  != "y" ]]
 			then
 				exit 1
 		fi
 
+		# everything the user sees from here on also goes into ./install.log
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Installation log created" | tee -a ./install.log
 
 		echo "" >> ./install.log
@@ -74,9 +78,11 @@ if [[ -z $1 || $1 != "uninstall" ]]
 		echo "" >> ./install.log
 
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Installing rsync" | tee -a ./install.log
-		apt-get -q=2 install rsync 2>&1 | tee -a ./install.log
+		# rsync is the only dependency, apt skips it by itself when it's already there
+		apt-get -y -q=2 install rsync 2>&1 | tee -a ./install.log
 
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Copying the main script into /usr/bin" | tee -a ./install.log
+		# copy the main script into its place, if cp fails there's no point in going on
 		if ! cp ./minibak.sh /usr/bin/minibak 2>&1 | tee -a ./install.log
 			then
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." | tee -a ./install.log
@@ -91,9 +97,11 @@ if [[ -z $1 || $1 != "uninstall" ]]
 		fi
 
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Adding execute permissions to the copy" | tee -a ./install.log
+		# cp keeps the permissions of the source, so just make sure it's executable
 		chmod +x /usr/bin/minibak | tee -a ./install.log
 
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Copying the config template into /etc/minibak.conf.template" | tee -a ./install.log
+		# the template stays untouched, so the user can always go back to the defaults
 		if ! cp ./conf /etc/minibak.conf.template 2>&1 | tee -a ./install.log
 			then
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." | tee -a ./install.log
@@ -101,12 +109,15 @@ if [[ -z $1 || $1 != "uninstall" ]]
 		fi
 
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Fetching data from ./conf" | tee -a ./install.log
+		# import the values (and the unit generating function) from the config that has just been copied
 		source ./conf
 
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Saving systemd units in /tmp/minibak" | tee -a ./install.log
+		# this writes minibak.service and minibak.timer into /tmp/minibak
 		func_saveSystemdUnitsToTmp
 
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Copying the minibak.service unit from /tmp/minibak to /etc/systemd/system" | tee -a ./install.log
+		# units are generated in /tmp first, then moved into /etc/systemd/system (same way as -x in minibak does it)
 		if ! cp /tmp/minibak/minibak.service /etc/systemd/system/minibak.service 2>&1 | tee -a ./install.log
 			then
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." | tee -a ./install.log
@@ -139,8 +150,10 @@ if [[ -z $1 || $1 != "uninstall" ]]
 		fi
 
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Reloading the systemd daemon" | tee -a ./install.log
+		# systemd has to learn about the new unit files before they can be enabled
 		systemctl daemon-reload | tee -a ./install.log
 
+		# bool_timerEnabled comes from the config - enabled = timer starts on boot, disabled = only manual runs
 		if [[ $bool_timerEnabled == true ]]
 			then
 				systemctl enable minibak.timer
@@ -150,11 +163,13 @@ if [[ -z $1 || $1 != "uninstall" ]]
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been disabled" | tee -a ./install.log
 		fi
 
+# ---- everything below is the removal ----
 	else	# do deinstallation
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Deinstallation has been started" >> ./uninstall.log
 
 		echo "" >> ./uninstall.log
 		echo "$text_introRemoval" | tee -a ./uninstall.log
+		# nothing is deleted before the user confirmed, the questions below are for the optional leftovers
 		echo "" >> ./uninstall.log
 
 		if [[ $(read -r -p "Would you like to continue? (y/N) : " x; echo $x) != "y" ]]
@@ -162,6 +177,7 @@ if [[ -z $1 || $1 != "uninstall" ]]
 				exit 1
 		fi
 
+		# everything is "no" by default, a question only flips its variable to true
 		bool_uninstallRsync=false
 		bool_removeLogs=false
 		bool_removeConfig=false
@@ -187,6 +203,7 @@ if [[ -z $1 || $1 != "uninstall" ]]
 				bool_clearTmp=true
 		fi
 
+		# the script itself goes first
 		if [[ -f "/usr/bin/minibak" ]]
 			then
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Deleting /usr/bin/minibak" | tee -a ./uninstall.log
@@ -200,6 +217,7 @@ if [[ -z $1 || $1 != "uninstall" ]]
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] File /usr/bin/minibak doesn't exit" | tee -a ./uninstall.log
 		fi
 
+		# timer goes before the service, otherwise it could just start a new job while this is running
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Probing minibak.timer unit" | tee -a ./uninstall.log
 		if systemctl cat minibak.timer >/dev/null 2>&1
 			then
@@ -216,12 +234,13 @@ if [[ -z $1 || $1 != "uninstall" ]]
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] systemd is unaware of a 'minibak.timer' unit" | tee -a ./uninstall.log
 		fi
 
+		# if a backup is running right now, wait for it so it doesn't get killed in the middle
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Probing minibak.service unit" | tee -a ./uninstall.log
 		if systemctl cat minibak.service >/dev/null 2>&1
 			then
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] minibak.service exists" | tee -a ./uninstall.log
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Waiting for current job to finish" | tee -a ./uninstall.log
-				while [[ $(systemctl is-active minibak.service) == "active" ]]
+				while [[ $(systemctl is-active minibak.service) == "active" || $(systemctl is-active minibak.service) == "activating" ]]
 					do 
 						sleep 5
 					done
@@ -235,6 +254,7 @@ if [[ -z $1 || $1 != "uninstall" ]]
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] systemd is unaware of a 'minibak.service' unit" | tee -a ./uninstall.log
 		fi
 
+		# unit files can only be deleted after systemd stopped using them (above)
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Probing the minibak.timer unit file" | tee -a ./uninstall.log
 		if [[ -f /etc/systemd/system/minibak.timer ]]
 			then 
@@ -265,26 +285,33 @@ if [[ -z $1 || $1 != "uninstall" ]]
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] minibak.service file doesn't exist" | tee -a ./uninstall.log
 		fi
 
+		# tell systemd that the unit files are gone
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Restarting the systemctl daemon" | tee -a ./uninstall.log
 		systemctl daemon-reload
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Clearing unit failure codes and resetting the unit start limit counter" | tee -a ./uninstall.log
 		systemctl reset-failed
 
+		# optional leftovers - only if the user said yes earlier
 		if [[ $bool_uninstallRsync == true ]]
 			then
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of rsync has been started" | tee -a ./uninstall.log
-				apt-get -q=2 remove rsync 2>&1 | tee -a ./uninstall.log
+				apt-get -y -q=2 remove rsync 2>&1 | tee -a ./uninstall.log
 		fi
 
 		if [[ $bool_removeLogs == true ]]
 			then
-				# delete logs
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of minibak logs has been started" | tee -a ./uninstall.log
-				if ! rm $dir_log/minibak.log 2>&1 | tee -a ./uninstall.log
-					then
-						echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./uninstall.log
-					else 
-						echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a ./uninstall.log
+				# delete default logs
+				if [[ -f /var/log/minibak.log ]]
+					then 
+						echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of minibak logs has been started" | tee -a ./uninstall.log
+						if ! rm /var/log/minibak.log 2>&1 | tee -a ./uninstall.log
+							then
+								echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./uninstall.log
+							else 
+								echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a ./uninstall.log
+						fi
+					else
+						echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [Warning] Log file does not exist" | tee -a ./uninstall.log
 				fi
 		fi
 
@@ -292,6 +319,7 @@ if [[ -z $1 || $1 != "uninstall" ]]
 			then
 				# delete default configs
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of default configuration file has been started" | tee -a ./uninstall.log
+				# both files have to be there, otherwise there's nothing consistent to delete
 				if [[ -f /etc/minibak.conf && -f /etc/minibak.conf.template ]]
 					then
 						if ! rm /etc/minibak.conf  2>&1 | tee -a ./uninstall.log
@@ -301,7 +329,7 @@ if [[ -z $1 || $1 != "uninstall" ]]
 								echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a ./uninstall.log
 						fi
 						echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of template has been started" | tee -a ./uninstall.log
-						if rm /etc/minibak.conf.template 2>&1 | tee -a ./uninstall.log
+						if ! rm /etc/minibak.conf.template 2>&1 | tee -a ./uninstall.log
 							then
 								echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./uninstall.log
 							else 

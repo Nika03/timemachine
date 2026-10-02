@@ -46,11 +46,12 @@ Default configuration file is located at /etc/minibak.conf
 It is recommended to make a copy of minibak.conf in another directory, and use that copy for changes.
 
 Variables:
-dir_src=<dir>			Source directory to be backed up, same as -s
-dir_dest=<dir>			Destination directory where the data from source (dir_src) will be saved, same as -d
-bool_schedulerEnabled=<true/false>	Enable/Disable scheduled backup of source (dir_src) files
-dir_log=<dir>			Directory where the logs will be saved. By default, it's /var/log
- 
+dir_src=<dir>				Source directory to be backed up, same as -s
+dir_dest=<dir>				Destination directory where the data from source (dir_src) will be saved, same as -d
+bool_timerEnabled=<true/false>		Enable/Disable scheduled backup of source (dir_src) files
+dir_log=<dir>				Directory where the logs will be saved. By default, it's /var/log
+int_keepFullWeeks=<number>		Full weeks (besides the current one) in which every backup is kept, older ones are thinned to one per week
+
 EOT
 
 read -d '' text_configErrorInfo << EOT
@@ -63,17 +64,21 @@ EOT
 
 # begin code section containing logic
 
+# working dir for the temporary stuff (the temporary log, the generated units), created if it's not there yet
 if ! [[ -d /tmp/minibak ]]
     then
         mkdir /tmp/minibak
 fi
 
+# the real log dir isn't known until the config is loaded, so everything goes into /tmp first and is moved over later
 echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] $0 started" >> /tmp/minibak/minibak.log
 
 # during the installation, the service and timer are pushed into their rightful dir
 # i should make it so that the installer also uses the function from config instead of a generic setting 
 
 # option handler along with arguments for options
+# the : at the start = getopts stays quiet and the : and ? cases at the bottom take care of the errors
+# options followed by : (s, d and c) need an argument
 while getopts ":s:d:vhHc:x" flag; do
 	#echo "flag -$flag, arg $OPTARG";
 	case $flag in
@@ -84,6 +89,7 @@ while getopts ":s:d:vhHc:x" flag; do
 			exit 0 ;;
 		H)	echo "$text_configHelp" >&2
 			exit 0 ;;
+		# -c: load the config, either the default one or one from a custom location
 		c) 	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Option -c has been called" >> /tmp/minibak/minibak.log
 			if [[ $OPTARG = "default" ]]
 				then
@@ -95,6 +101,7 @@ while getopts ":s:d:vhHc:x" flag; do
 							# if default config exists, import values for vars from it
 							source $dir_defaultConfig/minibak.conf
 
+							# the temporary log gets moved into the real log dir, if that one doesn't exist /var/log is used instead
 							if [[ -d $dir_log ]]
 								then
 									cat /tmp/minibak/minibak.log >> $dir_log/minibak.log
@@ -107,7 +114,6 @@ while getopts ":s:d:vhHc:x" flag; do
 									rm /tmp/minibak/minibak.log
 							fi
 
-							func_updateSystemdUnits
 						else
 							# default config file does not exist -> error
 							echo "$0 ERROR: The default config $dir_defaultConfig/minibak.conf does not exist! - Exiting..." >&2
@@ -130,6 +136,7 @@ while getopts ":s:d:vhHc:x" flag; do
 									# if exists, import the values for vars from config
 									source $OPTARG
 
+									# same log dir check as for the default config above
 									if [[ -d $dir_log ]]
 										then
 											cat /tmp/minibak/minibak.log >> $dir_log/minibak.log
@@ -150,14 +157,17 @@ while getopts ":s:d:vhHc:x" flag; do
 					fi
 			fi ;;
 
+		# -x: generate the units from the config and replace the installed ones if something changed
 		x)	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Saving systemd units in /tmp/minibak" | tee -a $dir_log/minibak.log
 			func_saveSystemdUnitsToTmp
 
 			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Checking if something changed about the systemd units" | tee -a $dir_log/minibak.log
+			# diff -w ignores whitespace, so only real changes count
+			# service and timer are compared separately and only replaced if they differ
 			if diff -w /tmp/minibak/minibak.service /etc/systemd/system/minibak.service > /dev/null
 				then
 					# files are identical
-					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] No changes have been made" | tee -a $dir_log/minibak.log
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] No changes to minibak.service have been made" | tee -a $dir_log/minibak.log
 				else
 					# there's a difference or an error occured
 					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Changes have been made, replacing the old units" | tee -a $dir_log/minibak.log
@@ -178,16 +188,21 @@ while getopts ":s:d:vhHc:x" flag; do
 									echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a $dir_log/minibak.log
 							fi
 					fi
+			fi
 
+			if diff -w /tmp/minibak/minibak.timer /etc/systemd/system/minibak.timer > /dev/null
+				then
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] No changes to minibak.timer have been made" | tee -a $dir_log/minibak.log
+				else
 					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Replacing the minibak.timer unit in /etc/systemd/system with /tmp/minibak" | tee -a $dir_log/minibak.log
-					cp /tmp/minibak/minibak.timer /etc/systemd/system/minibak.timer
+					cp -r /tmp/minibak/minibak.timer /etc/systemd/system/minibak.timer
 					if [[ $? -ne 0 ]]
 						then
 							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." | tee -a $dir_log/minibak.log
 							exit 1
 						else
-							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Copy job finished"
-							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Removing the temporary copy of minibak.timer"
+							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Copy job finished" | tee -a $dir_log/minibak.log
+							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Removing the temporary copy of minibak.timer" | tee -a $dir_log/minibak.log
 							rm /tmp/minibak/minibak.timer
 							if [[ $? -ne 0 ]]
 								then
@@ -198,7 +213,7 @@ while getopts ":s:d:vhHc:x" flag; do
 					fi
 			fi
 
-			if [[ bool_timerEnabled ]]
+			if [[ $bool_timerEnabled == true ]]
 				then
 					systemctl enable minibak.timer
 					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been enabled" | tee -a $dir_log/minibak.log
@@ -206,11 +221,14 @@ while getopts ":s:d:vhHc:x" flag; do
 					systemctl disable minibak.timer
 					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been disabled" | tee -a $dir_log/minibak.log
 			fi ;;
+		# an option that needs an argument got none (for example -s alone)
 		:) echo "Error: option -$OPTARG needs an argument" >&2; echo "$text_help" >&2; exit 1 ;;
+		# an option that doesn't exist
 		\?) echo "$text_help" >&2; exit 1 ;;
 	esac
 done
 
+# source and destination are known now (from options or config), check them before touching anything
 if [[ -z $dir_src ]]
 	then
 		# source string empty
@@ -236,6 +254,7 @@ if [[ -z $dir_src ]]
 		exit 1
 fi
 
+# --parents also creates all missing directories above it
 if ! [[ -d $dir_dest ]]
 	then
 		# destination doesn't exist
@@ -255,21 +274,28 @@ if ! [[ -d $dir_dest ]]
 fi
 
 #backupTimeAndDate="$(date +%Y-%m-%d_%H-%M-%S)"
+# every backup gets its own dir named by the time it started, those names sort chronologically
 currentBackupDir="$dir_dest/backup_$(date +%Y-%m-%d_%H-%M-%S)"
 
 printf '<%s>\n' $currentBackupDir
 echo "Creating directory $currentBackupDir"
 echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Creating the backup directory $currentBackupDir" >> $dir_log/minibak.log
 
+# newest dir in the destination = previous backup, used as --link-dest below
+# has to happen before the current dir is created, otherwise it'd find itself
 lastBackup=$(find $dir_dest -mindepth 1 -maxdepth 1 | sort -r | head -n 1)
 
 func_prune() {
 	# verb: to cut off or remove dead or living parts of (for example a plant) to improve shape or growth
 	# or simply, to reduce
 	
+	# keeps everything from the current week and the int_keepFullWeeks weeks before it
+	# older backups are reduced to one per calendar week (the first one of that week)
+	# optional arg 1 is a date to use instead of today, handy for testing
 	local ref="${1:-today}" thisMonday cutoff b name ts d t epoch week
 	local -A keptWeeks=()
 
+	# not a positive number -> skip, better to keep too much than to delete by accident
 	if ! [[ $int_keepFullWeeks =~ ^[1-9][0-9]*$ ]]
 		then
 			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] int_keepFullWeeks is not a positive number, skipping retention" >> $dir_log/minibak.log
@@ -283,14 +309,19 @@ func_prune() {
 	# oldest first: the first backup seen in a week is the one that stays
 	while read -r b
 		do
+			# name looks like backup_YYYY-MM-DD_HH-MM-SS, so pull the date and the time out of it
 			name=${b##*/}
 			ts=${name#backup_}
 			d=${ts%%_*}
 			t=${ts#*_}; t=${t//-/:}
+			# if the name can't be read, leave the dir alone
 			epoch=$(date -d "$d $t" +%s 2>/dev/null) || continue
+			# newer than the cutoff = inside the weeks that are kept in full
 			[[ $epoch -ge $cutoff ]] && continue
 
+			# ISO year and week, for example 2026-W35
 			week=$(date -d "$d" +%G-W%V)
+			# first backup of a week is remembered and stays, every other one from that week gets deleted
 			if [[ -z ${keptWeeks[$week]} ]]
 				then
 					keptWeeks[$week]=$b
@@ -303,12 +334,14 @@ func_prune() {
 		done < <(find "$dir_dest" -mindepth 1 -maxdepth 1 -type d -name 'backup_*' | sort)
 }
 
+# translates the exit code of rsync into a message and a log entry, then ends the script with that same code
 func_rsyncExitCode() 
 {
 	case $1 in
 		0)
 			echo "Success: Backup performed successfully"
 			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Backup job completed successfully. rsync quit with exit code $1" >> $dir_log/minibak.log
+			# cleanup only after a successful backup, a failed run must never remove older backups
 			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Starting a cleanup job" | tee -a $dir_log/minibak.log
 			func_prune
 			exit $1 ;;
@@ -376,6 +409,7 @@ func_rsyncExitCode()
 			echo "Failure: Timeout waiting for daemon connection"
 			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Timeout waiting for daemon connection. rsync quit with exit code $1" >> $dir_log/minibak.log
 			exit $1 ;;
+		# every code that isn't listed above
 		*)
 			echo "Failure: An unlisted error has occurred. rsync quit with error code $1"
 			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Unlisted error occurred. rsync quit with exit code $1" >> $dir_log/minibak.log
@@ -383,11 +417,13 @@ func_rsyncExitCode()
 	esac
 }
 
+# empty destination -> first backup is a full copy, otherwise an incremental one
 if [[ -z "$(ls $dir_dest)" ]]
 	then
 		echo "No previous backups found"
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] No previous backups found" >> $dir_log/minibak.log
 		mkdir $currentBackupDir
+		# -a = archive mode (permissions, owners, times, symlinks), -H = keep hardlinks
 		rsync -aH $dir_src $currentBackupDir
 		func_rsyncExitCode "$?"
 		
@@ -398,6 +434,7 @@ if [[ -z "$(ls $dir_dest)" ]]
 		echo "lastBackup = $lastBackup"
 		echo "currentBackupDir = $currentBackupDir"
 		mkdir $currentBackupDir
+		# --link-dest makes files that didn't change a hardlink to the previous backup, so they take no extra space
 		rsync -aHv --link-dest=$lastBackup $dir_src $currentBackupDir
 		func_rsyncExitCode "$?"
 fi
