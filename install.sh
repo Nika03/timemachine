@@ -118,7 +118,7 @@ func_installation() {
 	func_saveSystemdUnitsToTmp
 
 	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Copying the minibak.service unit from /tmp/minibak to /etc/systemd/system" | tee -a ./install.log
-	sudo cp /tmp/minibak/minibak.service /etc/systemd/system/minibak.service
+	cp /tmp/minibak/minibak.service /etc/systemd/system/minibak.service
 	if [[ $? -ne 0 ]]
 		then
 			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." | tee -a ./install.log
@@ -136,7 +136,7 @@ func_installation() {
 	fi
 
 	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Copying the minibak.timer unit from /tmp/minibak to /etc/systemd/system" | tee -a ./install.log
-	sudo cp /tmp/minibak/minibak.timer /etc/systemd/system/minibak.timer
+	cp /tmp/minibak/minibak.timer /etc/systemd/system/minibak.timer
 	if [[ $? -ne 0 ]]
 		then
 			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." | tee -a ./install.log
@@ -233,7 +233,7 @@ func_removal() {
 			fi
 		else
 			# warning - unit doesn't exist, execution proceeds regardless
-			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] minibak.timer doesn't exist in the default directory" | tee -a ./uninstall.log
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] systemd is unaware of a 'minibak.timer' unit" | tee -a ./uninstall.log
 	fi
 
 	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Probing minibak.service unit" | tee -a ./uninstall.log
@@ -242,47 +242,94 @@ func_removal() {
 			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] minibak.service exists" | tee -a ./uninstall.log
 			if systemctl is-enabled minibak.service
 				then
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Disabling and stopping minibak.service" | tee -a ./uninstall.log
 					systemctl disable --now minibak.service
 			fi
 		else
 			# warning - unit doesn't exist, execution proceeds regardless
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] systemd is unaware of a 'minibak.service' unit" | tee -a ./uninstall.log
 	fi
 
+	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Probing the minibak.timer unit file" | tee -a ./uninstall.log
 	if [[ -f /etc/systemd/system/minibak.timer ]]
 		then 
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] minibak.timer file exists - deleting..." | tee -a ./uninstall.log
 			rm /etc/systemd/system/minibak.timer
+			if [[ $? -ne 0 ]]
+				then
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./uninstall.log
+				else 
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a ./uninstall.log
+			fi
 		else
 			# warning - doesn't exist
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] minibak.timer file doesn't exist" | tee -a ./uninstall.log
 	fi
 
+	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Probing the minibak.service unit file" | tee -a ./uninstall.log
 	if [[ -f /etc/systemd/system/minibak.service ]]
 		then 
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] minibak.service file exists - deleting..." | tee -a ./uninstall.log
 			rm /etc/systemd/system/minibak.service
+			if [[ $? -ne 0 ]]
+				then
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./uninstall.log
+				else 
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a ./uninstall.log
+			fi
 		else
 			# warning - doesn't exist
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] minibak.service file doesn't exist" | tee -a ./uninstall.log
 	fi
 
+	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Restarting the systemctl daemon" | tee -a ./uninstall.log
 	systemctl daemon-reload
+	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Clearing unit failure codes and resetting the unit start limit counter" | tee -a ./uninstall.log
 	systemctl reset-failed
 
 	if bool_uninstallRsync
 		then
-			apt-get -q=2 remove rsync
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of rsync has been started" | tee -a ./uninstall.log
+			apt-get -q=2 remove rsync 2>&1 | tee -a ./uninstall.log
 	fi
 
 	if bool_removeLogs
 		then
 			# delete logs
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of minibak logs has been started" | tee -a ./uninstall.log
+			rm $dir_log/minibak.log
+			if [[ $? -ne 0 ]]
+				then
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./uninstall.log
+				else 
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a ./uninstall.log
+			fi
 	fi
 
 	if bool_removeConfig
 		then
 			# delete default configs
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of default configuration file and template has been started" | tee -a ./uninstall.log
+			rm /etc/minibak.conf && rm /etc/minibak.conf.template
+			if [[ $? -ne 0 ]]
+				then
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./uninstall.log
+				else 
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a ./uninstall.log
+			fi
 	fi
 
 	if bool_clearTmp
 		then
 			# delete /tmp/minibak dir
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Removal of /etc/minibak dir and its contents has been started" | tee -a ./uninstall.log
+			rm -r /etc/minibak
+			if [[ $? -ne 0 ]]
+				then
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the directory failed" | tee -a ./uninstall.log
+				else 
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the directory successful" | tee -a ./uninstall.log
+			fi
 	fi
 
 }

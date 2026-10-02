@@ -52,7 +52,7 @@ EOT
 
 read -d '' text_configErrorInfo << EOT
 Please insert the location of a valid configuration file, for example <-c ~/my-minibak-config.conf>
-or use <-c default> to use the default file $defaultConfig/minibak.conf
+or use <-c default> to use the default file $dir_defaultConfig/minibak.conf
 EOT
 
 # end code section with vars for user facing information
@@ -66,6 +66,67 @@ if ! [[ -d /tmp/minibak ]]
 fi
 
 echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] $0 started" >> /tmp/minibak/minibak.log
+
+# during the installation, the service and timer are pushed into their rightful dir
+# i should make it so that the installer also uses the function from config instead of a generic setting 
+func_updateSystemdUnits() {
+	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Saving systemd units in /tmp/minibak" | tee -a ./install.log
+	func_saveSystemdUnitsToTmp
+
+	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Checking if something changed about the systemd units" | tee -a ./install.log
+	if diff -w /tmp/minibak/minibak.service /etc/systemd/system/minibak.service > /dev/null
+		then
+			# files are identical
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] No changes have been made" | tee -a ./install.log
+		else
+			# there's a difference or an error occured
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Changes have been made, replacing the old units" | tee -a ./install.log
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Replacing the minibak.service unit in /etc/systemd/system with /tmp/minibak" | tee -a ./install.log
+			cp -r /tmp/minibak/minibak.service /etc/systemd/system/minibak.service
+			if [[ $? -ne 0 ]]
+				then
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." | tee -a ./install.log
+					exit 1
+				else
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Copy job finished" | tee -a ./install.log
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Removing the temporary copy of minibak.service" | tee -a ./install.log
+					rm /tmp/minibak/minibak.service
+					if [[ $? -ne 0 ]]
+						then
+							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./install.log
+						else 
+							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a ./install.log
+					fi
+			fi
+
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Replacing the minibak.timer unit in /etc/systemd/system with /tmp/minibak" | tee -a ./install.log
+			cp /tmp/minibak/minibak.timer /etc/systemd/system/minibak.timer
+			if [[ $? -ne 0 ]]
+				then
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." | tee -a ./install.log
+					exit 1
+				else
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Copy job finished"
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Removing the temporary copy of minibak.timer"
+					rm /tmp/minibak/minibak.timer
+					if [[ $? -ne 0 ]]
+						then
+							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./install.log
+						else 
+							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a ./install.log
+					fi
+			fi
+	fi
+
+	if bool_timerEnabled
+		then
+			systemctl enable minibak.timer
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been enabled" | tee -a ./install.log
+		else
+			systemctl disable minibak.timer
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been disabled" | tee -a ./install.log
+	fi
+}
 
 # option handler along with arguments for options
 while getopts ":s:d:vh:c:x" flag; do
@@ -86,11 +147,11 @@ while getopts ":s:d:vh:c:x" flag; do
 				then
 					# if arg is set to "default"
 					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Arg $OPTARG set for option -c" >> /tmp/minibak/minibak.log
-					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Fetching default config from $defaultConfig/minibak.conf" >> /tmp/minibak/minibak.log
-					if [[ -f "$defaultConfig/minibak.conf" ]]
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Fetching default config from $dir_defaultConfig/minibak.conf" >> /tmp/minibak/minibak.log
+					if [[ -f "$dir_defaultConfig/minibak.conf" ]]
 						then
 							# if default config exists, import values for vars from it
-							source $defaultConfig/minibak.conf
+							source $dir_defaultConfig/minibak.conf
 
 							if [[ -d $dir_log ]]
 								then
@@ -103,9 +164,11 @@ while getopts ":s:d:vh:c:x" flag; do
 									cat /tmp/minibak/minibak.log >> $dir_log/minibak.log
 									rm /tmp/minibak/minibak.log
 							fi
+
+							func_updateSystemdUnits
 						else
 							# default config file does not exist -> error
-							echo "$0 ERROR: The default config $defaultConfig/minibak.conf does not exist! - Exiting..." >&2
+							echo "$0 ERROR: The default config $dir_defaultConfig/minibak.conf does not exist! - Exiting..." >&2
 							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Default configuration file is missing. Exit code 1." >> /tmp/minibak/minibak.log
 							exit 1
 					fi
@@ -136,6 +199,8 @@ while getopts ":s:d:vh:c:x" flag; do
 											cat /tmp/minibak/minibak.log >> $dir_log/minibak.log
 											rm /tmp/minibak/minibak.log
 									fi
+
+									func_updateSystemdUnits
 								else
 									# config file doesn't exit
 									echo "The config file in the provided location does not exist in location $OPTARG! - Exiting..." >&2
@@ -145,9 +210,17 @@ while getopts ":s:d:vh:c:x" flag; do
 					fi
 			fi ;;
 		x) 
-			# during the installation, the service and timer are pushed into their rightful dir
-			# i should make it so that the installer also uses the function from config instead of a generic setting 
-			func_saveSystemdUnitsToTmp ;;
+			if [[ $(whoami) != "root" ]]
+				then
+					sudo bash -c "$(declare -f func_updateSystemdUnits); func_updateSystemdUnits"
+					sudoExitCode=$?
+					if [[ $sudoExitCode -ne 0 ]]
+						then 
+							exit $sudoExitCode
+					fi 
+				else
+					func_updateSystemdUnits
+			fi ;;
 		\?) echo "$text_help" >&2; exit 1;;
 	esac
 done
