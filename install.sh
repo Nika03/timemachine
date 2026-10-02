@@ -93,9 +93,6 @@ if [[ -z $1 || $1 != "uninstall" ]]
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Adding execute permissions to the copy" | tee -a ./install.log
 		chmod +x /usr/bin/minibak | tee -a ./install.log
 
-		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Reloading the systemd daemon" | tee -a ./install.log
-		systemctl daemon-reload | tee -a ./install.log
-
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Copying the config template into /etc/minibak.conf.template" | tee -a ./install.log
 		if ! cp ./conf /etc/minibak.conf.template 2>&1 | tee -a ./install.log
 			then
@@ -141,7 +138,10 @@ if [[ -z $1 || $1 != "uninstall" ]]
 				fi
 		fi
 
-		if [[ bool_timerEnabled ]]
+		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Reloading the systemd daemon" | tee -a ./install.log
+		systemctl daemon-reload | tee -a ./install.log
+
+		if [[ $bool_timerEnabled == true ]]
 			then
 				systemctl enable minibak.timer
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been enabled" | tee -a ./install.log
@@ -221,7 +221,7 @@ if [[ -z $1 || $1 != "uninstall" ]]
 			then
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] minibak.service exists" | tee -a ./uninstall.log
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Waiting for current job to finish" | tee -a ./uninstall.log
-				while systemctl is-active minibak.service
+				while [[ $(systemctl is-active minibak.service) == "active" ]]
 					do 
 						sleep 5
 					done
@@ -270,13 +270,13 @@ if [[ -z $1 || $1 != "uninstall" ]]
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Clearing unit failure codes and resetting the unit start limit counter" | tee -a ./uninstall.log
 		systemctl reset-failed
 
-		if [[ bool_uninstallRsync ]]
+		if [[ $bool_uninstallRsync == true ]]
 			then
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of rsync has been started" | tee -a ./uninstall.log
 				apt-get -q=2 remove rsync 2>&1 | tee -a ./uninstall.log
 		fi
 
-		if [[ bool_removeLogs ]]
+		if [[ $bool_removeLogs == true ]]
 			then
 				# delete logs
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of minibak logs has been started" | tee -a ./uninstall.log
@@ -288,22 +288,32 @@ if [[ -z $1 || $1 != "uninstall" ]]
 				fi
 		fi
 
-		if [[ bool_removeConfig ]]
+		if [[ $bool_removeConfig == true ]]
 			then
 				# delete default configs
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of default configuration file and template has been started" | tee -a ./uninstall.log
-				if ! rm /etc/minibak.conf  2>&1 | tee -a ./uninstall.log && rm /etc/minibak.conf.template 2>&1 | tee -a ./uninstall.log
+				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of default configuration file has been started" | tee -a ./uninstall.log
+				if [[ -f /etc/minibak.conf && -f /etc/minibak.conf.template ]]
 					then
-						echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./uninstall.log
-					else 
-						echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a ./uninstall.log
+						if ! rm /etc/minibak.conf  2>&1 | tee -a ./uninstall.log
+							then
+								echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./uninstall.log
+							else 
+								echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a ./uninstall.log
+						fi
+						echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of template has been started" | tee -a ./uninstall.log
+						if rm /etc/minibak.conf.template 2>&1 | tee -a ./uninstall.log
+							then
+								echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./uninstall.log
+							else 
+								echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a ./uninstall.log
+						fi
 				fi
 		fi
 
-		if [[ bool_clearTmp ]]
+		if [[ $bool_clearTmp == true ]]
 			then
 				# delete /tmp/minibak dir
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Removal of /etc/minibak dir and its contents has been started" | tee -a ./uninstall.log
+				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Removal of /tmp/minibak dir and its contents has been started" | tee -a ./uninstall.log
 				if [[ -d /tmp/minibak ]]
 					then
 						if ! rm -r /tmp/minibak 2>&1 | tee -a ./uninstall.log

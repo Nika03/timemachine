@@ -206,7 +206,7 @@ while getopts ":s:d:vhHc:x" flag; do
 					systemctl disable minibak.timer
 					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been disabled" | tee -a $dir_log/minibak.log
 			fi ;;
-		:) echo "Error: option -$OPTARG needs an argument"; echo "$text_help" >&2; exit 1 ;;
+		:) echo "Error: option -$OPTARG needs an argument" >&2; echo "$text_help" >&2; exit 1 ;;
 		\?) echo "$text_help" >&2; exit 1 ;;
 	esac
 done
