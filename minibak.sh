@@ -35,7 +35,7 @@ Options:
 -c <file>	Location to a config file
 -c default	Execute with the default config (located at /etc/minibak.conf)
 -x		Compare the current systemd service and timer with the one in the configuration.
-		If there is a change, replace them and apply changes. Changes will be visible on next scheduled execution.
+		If there is a change, replace them and apply the changes right away. No backup is made.
  
 EOT
 
@@ -213,12 +213,18 @@ while getopts ":s:d:vhHc:x" flag; do
 					fi
 			fi
 
+			# systemd has to learn about the replaced unit files, otherwise it keeps working with the old ones
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Reloading the systemd daemon" | tee -a $dir_log/minibak.log
+			systemctl daemon-reload
+
 			if [[ $bool_timerEnabled == true ]]
 				then
-					systemctl enable minibak.timer
+					systemctl enable --now minibak.timer
+					# restart, so a timer that's already running picks up a changed schedule
+					systemctl restart minibak.timer
 					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been enabled" | tee -a $dir_log/minibak.log
 				else
-					systemctl disable minibak.timer
+					systemctl disable --now minibak.timer
 					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been disabled" | tee -a $dir_log/minibak.log
 			fi 
 			

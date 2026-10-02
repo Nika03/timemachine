@@ -159,10 +159,10 @@ if [[ -z $1 || $1 != "uninstall" ]]
 		# bool_timerEnabled comes from the config - enabled = timer starts on boot, disabled = only manual runs
 		if [[ $bool_timerEnabled == true ]]
 			then
-				systemctl enable --now minibak.timer
+				systemctl enable --now minibak.timer 2>&1 | tee -a ./install.log
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been enabled" | tee -a ./install.log
 			else
-				systemctl disable --now minibak.timer
+				systemctl disable --now minibak.timer 2>&1 | tee -a ./install.log
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been disabled" | tee -a ./install.log
 		fi
 
