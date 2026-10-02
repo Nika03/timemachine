@@ -80,7 +80,7 @@ while getopts ":s:d:vh:c:x" flag; do
 		s) dir_src=$OPTARG ;;
 		d) dir_dest=$OPTARG ;;
 		v) bool_verboseMode=1 ;;
-		h)	if [[ $OPTARG = "config" ]]	# if arg is invalid or empty, it will jump to \?) which has the help text
+		h)	if [[ $OPTARG != "config" ]]	# if arg is invalid or empty, it will jump to \?) which has the help text
 				then
 					echo "$text_configHelp" >&2
 					exit 0
