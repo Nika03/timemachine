@@ -1,14 +1,52 @@
 #! /bin/bash
 
 # Contents of the directory declared in dir_src will be the source used for the backup
-dir_src="/root"
+    dir_src="/root"
+
 
 # The directory declared in dir_dest will be used to store the backups
 # If the directory doesn't exist, minibak will attempt to create it
-dir_dest="/root/root.minibak"
+    dir_dest="/root/root.minibak"
 
-# placeholder
-bool_schedulerEnabled=0
+
+# enable/disable scheduled execs
+    bool_timerEnabled=false
+
 
 # Logs from execution of the script will be saved in this directory.
-dir_log="/var/log"
+    dir_log="/var/log"
+
+
+func_saveSystemdUnitsToTmp() {
+
+cat > /tmp/minibak/minibak.service << EOT
+[Unit]
+Description=Execute Minibak
+
+[Service]
+Type=oneshot
+ExecStart='/usr/bin/minibak -c /etc/minibak.conf'
+EOT
+
+# OnCalendar=DayOfWeek Year-Month-Day Hour:Minute:Second
+# OnCalendar can be called multiple times 
+cat > /tmp/minibak/minibak.timer << EOT
+[Unit]
+Description=Execute Minibak during specified times
+
+[Timer]
+OnCalendar=Mon..Sun *-*-* 00:00:00
+OnCalendar=Mon..Sun *-*-* 12:00:00
+Unit=minibak.service
+Persistent=false
+
+[Install]
+WantedBy=timers.target
+EOT
+
+}
+
+
+
+#sudo systemctl daemon-reload
+#sudo systemctl restart your-job.timer
