@@ -84,7 +84,10 @@ while getopts ":s:d:vh:c:x" flag; do
 				then
 					echo "$text_configHelp" >&2
 					exit 0
-				else
+			fi
+
+			if [[ -z $OPTARG ]]
+				then 
 					echo "$text_help" >&2
 					exit 0
 			fi ;;
@@ -211,8 +214,8 @@ while getopts ":s:d:vh:c:x" flag; do
 					systemctl disable minibak.timer
 					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been disabled" | tee -a $dir_log/minibak.log
 			fi ;;
-
-		\?) echo "$text_help" >&2; exit 1;;
+		:) echo "Error: option -$OPTARG needs an argument"; echo "$text_help" >&2; exit 1 ;;
+		\?) echo "$text_help" >&2; exit 1 ;;
 	esac
 done
 
