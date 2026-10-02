@@ -263,7 +263,45 @@ echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Creating the backup directory $curr
 
 lastBackup=$(find $dir_dest -mindepth 1 -maxdepth 1 | sort -r | head -n 1)
 
-#mkdir $currentBackupDir
+func_prune() {
+	# verb: to cut off or remove dead or living parts of (for example a plant) to improve shape or growth
+	# or simply, to reduce
+	
+	local ref="${1:-today}" thisMonday cutoff b name ts d t epoch week
+	local -A keptWeeks=()
+
+	if ! [[ $int_keepFullWeeks =~ ^[1-9][0-9]*$ ]]
+		then
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] int_keepFullWeeks is not a positive number, skipping retention" >> $dir_log/minibak.log
+			return
+	fi
+
+	# Monday of the current ISO week, minus the weeks that are kept in full
+	thisMonday=$(date -d "$ref -$(( $(date -d "$ref" +%u) - 1 )) days" +%F)
+	cutoff=$(date -d "$thisMonday -$int_keepFullWeeks weeks" +%s)
+
+	# oldest first: the first backup seen in a week is the one that stays
+	while read -r b
+		do
+			name=${b##*/}
+			ts=${name#backup_}
+			d=${ts%%_*}
+			t=${ts#*_}; t=${t//-/:}
+			epoch=$(date -d "$d $t" +%s 2>/dev/null) || continue
+			[[ $epoch -ge $cutoff ]] && continue
+
+			week=$(date -d "$d" +%G-W%V)
+			if [[ -z ${keptWeeks[$week]} ]]
+				then
+					keptWeeks[$week]=$b
+				else
+					if rm -rf -- "$b"
+						then echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Retention: deleted $b" >> $dir_log/minibak.log
+						else echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Retention: failed to delete $b" >> $dir_log/minibak.log
+					fi
+			fi
+		done < <(find "$dir_dest" -mindepth 1 -maxdepth 1 -type d -name 'backup_*' | sort)
+}
 
 func_rsyncExitCode() 
 {
@@ -271,6 +309,8 @@ func_rsyncExitCode()
 		0)
 			echo "Success: Backup performed successfully"
 			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Backup job completed successfully. rsync quit with exit code $1" >> $dir_log/minibak.log
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Starting a cleanup job" | tee -a $dir_log/minibak.log
+			func_prune
 			exit $1 ;;
 		1)
 			echo "Failure: Syntax or usage error"

@@ -16,6 +16,10 @@
 # Logs from execution of the script will be saved in this directory.
     dir_log="/var/log"
 
+# Backups of the current week and this many full weeks before it are all kept.
+# Older backups are thinned to one per calendar week (the first backup of that week).
+    int_keepFullWeeks=4
+
 
 func_saveSystemdUnitsToTmp() {
 
