@@ -1,5 +1,8 @@
 #! /bin/bash
 
+# [[ if user id is not 0 ]] = true -> replace current process with script ran as root with same args
+[[ $EUID -ne 0 ]] && exec sudo bash "$0" "$@"
+
 # begin code section where the vars with initial data are declared
 
 	dir_src=""				# source data to backup
@@ -69,64 +72,6 @@ echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] $0 started" >> /tmp/minibak/minibak
 
 # during the installation, the service and timer are pushed into their rightful dir
 # i should make it so that the installer also uses the function from config instead of a generic setting 
-func_updateSystemdUnits() {
-	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Saving systemd units in /tmp/minibak" | tee -a ./install.log
-	func_saveSystemdUnitsToTmp
-
-	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Checking if something changed about the systemd units" | tee -a ./install.log
-	if diff -w /tmp/minibak/minibak.service /etc/systemd/system/minibak.service > /dev/null
-		then
-			# files are identical
-			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] No changes have been made" | tee -a ./install.log
-		else
-			# there's a difference or an error occured
-			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Changes have been made, replacing the old units" | tee -a ./install.log
-			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Replacing the minibak.service unit in /etc/systemd/system with /tmp/minibak" | tee -a ./install.log
-			cp -r /tmp/minibak/minibak.service /etc/systemd/system/minibak.service
-			if [[ $? -ne 0 ]]
-				then
-					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." | tee -a ./install.log
-					exit 1
-				else
-					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Copy job finished" | tee -a ./install.log
-					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Removing the temporary copy of minibak.service" | tee -a ./install.log
-					rm /tmp/minibak/minibak.service
-					if [[ $? -ne 0 ]]
-						then
-							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./install.log
-						else 
-							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a ./install.log
-					fi
-			fi
-
-			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Replacing the minibak.timer unit in /etc/systemd/system with /tmp/minibak" | tee -a ./install.log
-			cp /tmp/minibak/minibak.timer /etc/systemd/system/minibak.timer
-			if [[ $? -ne 0 ]]
-				then
-					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." | tee -a ./install.log
-					exit 1
-				else
-					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Copy job finished"
-					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Removing the temporary copy of minibak.timer"
-					rm /tmp/minibak/minibak.timer
-					if [[ $? -ne 0 ]]
-						then
-							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./install.log
-						else 
-							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a ./install.log
-					fi
-			fi
-	fi
-
-	if bool_timerEnabled
-		then
-			systemctl enable minibak.timer
-			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been enabled" | tee -a ./install.log
-		else
-			systemctl disable minibak.timer
-			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been disabled" | tee -a ./install.log
-	fi
-}
 
 # option handler along with arguments for options
 while getopts ":s:d:vh:c:x" flag; do
@@ -135,14 +80,16 @@ while getopts ":s:d:vh:c:x" flag; do
 		s) dir_src=$OPTARG ;;
 		d) dir_dest=$OPTARG ;;
 		v) bool_verboseMode=1 ;;
-		h) 
-			if [[ $OPTARG = "config" ]]	# if arg is invalid or empty, it will jump to \?) which has the help text
+		h)	if [[ $OPTARG = "config" ]]	# if arg is invalid or empty, it will jump to \?) which has the help text
 				then
 					echo "$text_configHelp" >&2
 					exit 0
-				fi ;;
-		c) 
-			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Option -c has been called" >> /tmp/minibak/minibak.log
+				else
+					echo "$text_help" >&2
+					exit 0
+			fi ;;
+
+		c) 	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Option -c has been called" >> /tmp/minibak/minibak.log
 			if [[ $OPTARG = "default" ]]
 				then
 					# if arg is set to "default"
@@ -199,8 +146,6 @@ while getopts ":s:d:vh:c:x" flag; do
 											cat /tmp/minibak/minibak.log >> $dir_log/minibak.log
 											rm /tmp/minibak/minibak.log
 									fi
-
-									func_updateSystemdUnits
 								else
 									# config file doesn't exit
 									echo "The config file in the provided location does not exist in location $OPTARG! - Exiting..." >&2
@@ -209,18 +154,64 @@ while getopts ":s:d:vh:c:x" flag; do
 							fi
 					fi
 			fi ;;
-		x) 
-			if [[ $(whoami) != "root" ]]
+
+		x)	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Saving systemd units in /tmp/minibak" | tee -a $dir_log/minibak.log
+			func_saveSystemdUnitsToTmp
+
+			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Checking if something changed about the systemd units" | tee -a $dir_log/minibak.log
+			if diff -w /tmp/minibak/minibak.service /etc/systemd/system/minibak.service > /dev/null
 				then
-					sudo bash -c "$(declare -f func_updateSystemdUnits); func_updateSystemdUnits"
-					sudoExitCode=$?
-					if [[ $sudoExitCode -ne 0 ]]
-						then 
-							exit $sudoExitCode
-					fi 
+					# files are identical
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] No changes have been made" | tee -a $dir_log/minibak.log
 				else
-					func_updateSystemdUnits
+					# there's a difference or an error occured
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Changes have been made, replacing the old units" | tee -a $dir_log/minibak.log
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Replacing the minibak.service unit in /etc/systemd/system with /tmp/minibak" | tee -a $dir_log/minibak.log
+					cp -r /tmp/minibak/minibak.service /etc/systemd/system/minibak.service
+					if [[ $? -ne 0 ]]
+						then
+							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." | tee -a $dir_log/minibak.log
+							exit 1
+						else
+							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Copy job finished" | tee -a $dir_log/minibak.log
+							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Removing the temporary copy of minibak.service" | tee -a $dir_log/minibak.log
+							rm /tmp/minibak/minibak.service
+							if [[ $? -ne 0 ]]
+								then
+									echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a $dir_log/minibak.log
+								else 
+									echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a $dir_log/minibak.log
+							fi
+					fi
+
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Replacing the minibak.timer unit in /etc/systemd/system with /tmp/minibak" | tee -a $dir_log/minibak.log
+					cp /tmp/minibak/minibak.timer /etc/systemd/system/minibak.timer
+					if [[ $? -ne 0 ]]
+						then
+							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." | tee -a $dir_log/minibak.log
+							exit 1
+						else
+							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Copy job finished"
+							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Removing the temporary copy of minibak.timer"
+							rm /tmp/minibak/minibak.timer
+							if [[ $? -ne 0 ]]
+								then
+									echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a $dir_log/minibak.log
+								else 
+									echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a $dir_log/minibak.log
+							fi
+					fi
+			fi
+
+			if [[ bool_timerEnabled ]]
+				then
+					systemctl enable minibak.timer
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been enabled" | tee -a $dir_log/minibak.log
+				else
+					systemctl disable minibak.timer
+					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been disabled" | tee -a $dir_log/minibak.log
 			fi ;;
+
 		\?) echo "$text_help" >&2; exit 1;;
 	esac
 done
@@ -350,7 +341,7 @@ func_rsyncExitCode()
 			echo "Failure: Timeout waiting for daemon connection"
 			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Timeout waiting for daemon connection. rsync quit with exit code $1" >> $dir_log/minibak.log
 			exit $1 ;;
-		\?)
+		*)
 			echo "Failure: An unlisted error has occurred. rsync quit with error code $1"
 			echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [FAILURE] Unlisted error occurred. rsync quit with exit code $1" >> $dir_log/minibak.log
 			exit $1 ;;

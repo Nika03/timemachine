@@ -6,7 +6,7 @@
 
 # The directory declared in dir_dest will be used to store the backups
 # If the directory doesn't exist, minibak will attempt to create it
-    dir_dest="/root/root.minibak"
+    dir_dest="/var/backups/minibak"
 
 
 # enable/disable scheduled execs
@@ -19,13 +19,18 @@
 
 func_saveSystemdUnitsToTmp() {
 
+    if ! [[ -d /tmp/minibak ]]
+        then
+            mkdir /tmp/minibak
+    fi
+
 cat > /tmp/minibak/minibak.service << EOT
 [Unit]
 Description=Execute Minibak
 
 [Service]
 Type=oneshot
-ExecStart='/usr/bin/minibak -c /etc/minibak.conf'
+ExecStart=/usr/bin/minibak -c /etc/minibak.conf
 EOT
 
 # OnCalendar=DayOfWeek Year-Month-Day Hour:Minute:Second
