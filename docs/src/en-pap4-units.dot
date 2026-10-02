@@ -1,0 +1,35 @@
+digraph G {
+  graph [rankdir=TB, nodesep=0.45, ranksep=0.32, fontname="DejaVu Sans", labelloc=t, fontsize=14, label="PAP 4: -x, update systemd units", pad=0.3];
+  node [fontname="DejaVu Sans", fontsize=11, margin="0.16,0.08"];
+  edge [fontname="DejaVu Sans", fontsize=10];
+  s [shape=box, style="rounded,filled", fillcolor="#dfe9f7", label="-x (config already loaded)"];
+  gen [shape=box, style=filled, fillcolor="#ffffff", label="func_saveSystemdUnitsToTmp\n(generates both units in /tmp/minibak)"];
+  d1 [shape=diamond, style=filled, fillcolor="#fff4d6", label="minibak.service differs from\ninstalled unit?"];
+  c1 [shape=box, style=filled, fillcolor="#ffffff", label="replace installed service,\ndelete temp copy"];
+  d2 [shape=diamond, style=filled, fillcolor="#fff4d6", label="minibak.timer differs from\ninstalled unit?"];
+  c2 [shape=box, style=filled, fillcolor="#ffffff", label="replace installed timer,\ndelete temp copy"];
+  ok [shape=diamond, style=filled, fillcolor="#fff4d6", label="copy successful?"];
+  err [shape=parallelogram, style=filled, fillcolor="#e6f4e6", label="Error message,\nlog entry"];
+  e1 [shape=box, style="rounded,filled", fillcolor="#dfe9f7", label="Exit 1"];
+  rl [shape=box, style=filled, fillcolor="#ffffff", label="systemctl daemon-reload"];
+  d3 [shape=diamond, style=filled, fillcolor="#fff4d6", label="bool_timerEnabled = true?"];
+  en [shape=box, style=filled, fillcolor="#ffffff", label="systemctl enable --now minibak.timer\nsystemctl restart minibak.timer"];
+  di [shape=box, style=filled, fillcolor="#ffffff", label="systemctl disable --now minibak.timer"];
+  e0 [shape=box, style="rounded,filled", fillcolor="#dfe9f7", label="Exit 0 (no backup is made)"];
+  s -> gen;
+  gen -> d1;
+  d1 -> c1 [label="yes"];
+  d1 -> d2 [label="no"];
+  c1 -> ok;
+  ok -> d2 [label="yes"];
+  ok -> err [label="no"];
+  d2 -> c2 [label="yes"];
+  d2 -> rl [label="no"];
+  c2 -> rl;
+  err -> e1;
+  rl -> d3;
+  d3 -> en [label="yes"];
+  d3 -> di [label="no"];
+  en -> e0;
+  di -> e0;
+}

@@ -1,0 +1,47 @@
+MINIBAK - KURZANLEITUNG ZUR INSTALLATION
+========================================
+(Vollständige Dokumentation: README.de.md)
+
+VORAUSSETZUNGEN
+  - Debian oder Ubuntu mit systemd (getestet unter Debian 13)
+  - Root-Zugriff (die Skripte fordern sudo selbst an)
+  - Internet oder lokaler Mirror für rsync (wird bei Bedarf automatisch installiert)
+  - Die Dateien install.sh, minibak.sh und conf in EINEM Verzeichnis
+
+1. KONFIGURIEREN
+     nano conf
+   Mindestens setzen:
+     dir_src="/pfad/der/gesichert/wird"
+     dir_dest="/pfad/fuer/die/backups"    (darf nicht innerhalb von dir_src liegen)
+     bool_timerEnabled=true               (true = zeitgesteuert, false = nur manuell)
+   Optional: dir_log (Standard /var/log), int_keepFullWeeks (Standard 4)
+
+2. INSTALLIEREN
+     chmod +x install.sh
+     ./install.sh
+   Die Liste der Änderungen lesen und mit "y" bestätigen. Alles wird auch in
+   install.log protokolliert. Ein erneuter Aufruf überschreibt /etc/minibak.conf.
+
+3. PRÜFEN
+     ls -l /usr/bin/minibak /etc/minibak.conf /etc/systemd/system/minibak.*
+     systemctl list-timers minibak.timer      (nächster Lauf: 00:00 / 12:00 Uhr)
+
+4. ERSTES BACKUP
+     minibak -c default
+     ls <dir_dest>                            (Verzeichnis backup_JJJJ-MM-TT_hh-mm-ss)
+
+5. ALLTAG
+     minibak -c default                       sofort ein Backup erstellen
+     minibak -c default -x                    Änderungen am Timer/bool_timerEnabled aus
+                                              /etc/minibak.conf übernehmen (ohne Backup)
+     less /var/log/minibak.log                Log
+     journalctl -u minibak.service            Ausgabe zeitgesteuerter Läufe
+     minibak -h                               Hilfe
+
+6. WIEDERHERSTELLEN
+     rsync -aH <dir_dest>/backup_<Zeitstempel>/<Name von dir_src>/ /restore/ziel/
+
+7. DEINSTALLIEREN
+     ./install.sh uninstall
+   Vier optionale Fragen (Standard jeweils "nein"): rsync entfernen, Logs löschen,
+   Konfiguration löschen, /tmp/minibak leeren. Die Backups selbst werden nie gelöscht.

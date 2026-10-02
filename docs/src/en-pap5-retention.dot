@@ -1,0 +1,37 @@
+digraph G {
+  graph [rankdir=TB, nodesep=0.45, ranksep=0.32, fontname="DejaVu Sans", labelloc=t, fontsize=14, label="PAP 5: retention (func_prune)", pad=0.3];
+  node [fontname="DejaVu Sans", fontsize=11, margin="0.16,0.08"];
+  edge [fontname="DejaVu Sans", fontsize=10];
+  s [shape=box, style="rounded,filled", fillcolor="#dfe9f7", label="Start func_prune"];
+  d1 [shape=diamond, style=filled, fillcolor="#fff4d6", label="int_keepFullWeeks a\npositive integer?"];
+  w [shape=parallelogram, style=filled, fillcolor="#e6f4e6", label="log warning"];
+  cut [shape=box, style=filled, fillcolor="#ffffff", label="thisMonday = Monday of the current ISO week\ncutoff = thisMonday - int_keepFullWeeks weeks"];
+  ls [shape=box, style=filled, fillcolor="#ffffff", label="list backup_* directories\nin dir_dest, oldest first"];
+  d2 [shape=diamond, style=filled, fillcolor="#fff4d6", label="another directory?"];
+  parse [shape=box, style=filled, fillcolor="#ffffff", label="read date and time\nfrom the name"];
+  d3 [shape=diamond, style=filled, fillcolor="#fff4d6", label="name readable?"];
+  d4 [shape=diamond, style=filled, fillcolor="#fff4d6", label="time >= cutoff?"];
+  wk [shape=box, style=filled, fillcolor="#ffffff", label="week = ISO year-week of the date\n(e.g. 2026-W35)"];
+  d5 [shape=diamond, style=filled, fillcolor="#fff4d6", label="week already has a\nkept backup?"];
+  keep [shape=box, style=filled, fillcolor="#ffffff", label="remember directory\nas the one to keep"];
+  rm [shape=box, style=filled, fillcolor="#ffffff", label="rm -rf directory,\nlog the deletion"];
+  e [shape=box, style="rounded,filled", fillcolor="#dfe9f7", label="End"];
+  s -> d1;
+  d1 -> cut [label="yes"];
+  d1 -> w [label="no"];
+  w -> e;
+  cut -> ls;
+  ls -> d2;
+  d2 -> parse [label="yes"];
+  d2 -> e [label="no"];
+  parse -> d3;
+  d3 -> d4 [label="yes"];
+  d4 -> wk [label="no"];
+  wk -> d5;
+  d5 -> keep [label="no"];
+  d5 -> rm [label="yes"];
+  d3 -> d2 [label="no", constraint=false];
+  d4 -> d2 [label="yes (keep)", constraint=false];
+  keep -> d2 [constraint=false];
+  rm -> d2 [constraint=false];
+}

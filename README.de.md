@@ -1,105 +1,105 @@
-# Minibak – incremental backup with rsync and systemd
+# Minibak – inkrementelles Backup mit rsync und systemd
 
-> Documentation for IT professionals · [Deutsche Version](README.de.md) · [Short installation guide](INSTALL)
+> Dokumentation für IT-Fachleute · [English version](README.md) · [Kurzanleitung zur Installation](INSTALL.de)
 
-## Contents
+## Inhalt
 
-1. [Product summary](#1-product-summary)
-2. [System description](#2-system-description)
-   1. [System overview](#21-system-overview)
-   2. [Installed files and directories](#22-installed-files-and-directories)
-   3. [Components](#23-components)
-   4. [Flowcharts](#24-flowcharts-pap)
-   5. [Design decisions](#25-design-decisions)
-3. [Source code](#3-source-code)
-4. [Customer documentation: installation and operation](#4-customer-documentation-installation-and-operation)
-5. [Testing and verification](#5-testing-and-verification)
-6. [Conclusion](#6-conclusion)
-7. [Appendix: source code](#appendix-source-code)
-
----
-
-## 1. Product summary
-
-Minibak is a small backup tool for Debian/Ubuntu systems, written in Bash. It copies a directory into timestamped snapshots, runs on a schedule and cleans up old snapshots by itself.
-
-- **Incremental snapshots:** every run creates a new directory `backup_YYYY-MM-DD_hh-mm-ss`. Unchanged files are hard-linked to the previous snapshot (`rsync --link-dest`), so each snapshot is a complete, directly browsable copy that only costs the space of the changed files.
-- **Scheduled:** a systemd timer starts the backup (default: 00:00 and 12:00). The schedule is defined in one place, the configuration file.
-- **Automatic retention:** all backups of the current and the last four calendar weeks are kept (configurable); older ones are thinned to one backup per week.
-- **One configuration file** (`/etc/minibak.conf`), alternatively command-line options.
-- **Installer and uninstaller** with confirmation, a list of all system changes, and logs.
-- **Logging** with levels (`INFO`, `SUCCESS`, `WARNING`, `ERROR`, `FAILURE`) and meaningful exit codes.
-- **No dependencies** besides `rsync` and standard GNU tools. Restoring needs no special tool: a snapshot is an ordinary directory tree.
+1. [Produktbeschreibung](#1-produktbeschreibung)
+2. [Systembeschreibung](#2-systembeschreibung)
+   1. [Systemübersicht](#21-systemübersicht)
+   2. [Installierte Dateien und Verzeichnisse](#22-installierte-dateien-und-verzeichnisse)
+   3. [Komponenten](#23-komponenten)
+   4. [Ablaufpläne](#24-ablaufpläne-pap)
+   5. [Entwurfsentscheidungen](#25-entwurfsentscheidungen)
+3. [Quelltexte](#3-quelltexte)
+4. [Kundendokumentation: Installation und Bedienung](#4-kundendokumentation-installation-und-bedienung)
+5. [Test und Verifikation](#5-test-und-verifikation)
+6. [Fazit](#6-fazit)
+7. [Anhang: Quelltexte](#anhang-quelltexte)
 
 ---
 
-## 2. System description
+## 1. Produktbeschreibung
 
-### 2.1 System overview
+Minibak ist ein kleines, in Bash geschriebenes Backup-Werkzeug für Debian/Ubuntu. Es kopiert ein Verzeichnis in Snapshots mit Zeitstempel, läuft zeitgesteuert und räumt alte Snapshots selbstständig auf.
 
-![System overview](docs/img/en-system.png)
+- **Inkrementelle Snapshots:** Jeder Lauf erzeugt ein neues Verzeichnis `backup_JJJJ-MM-TT_hh-mm-ss`. Unveränderte Dateien werden per Hardlink auf den vorherigen Snapshot verwiesen (`rsync --link-dest`). Jeder Snapshot ist dadurch eine vollständige, direkt durchsuchbare Kopie, die nur den Platz der geänderten Dateien kostet.
+- **Zeitgesteuert:** Ein systemd-Timer startet das Backup (Standard: 00:00 und 12:00 Uhr). Der Zeitplan ist an genau einer Stelle definiert, der Konfigurationsdatei.
+- **Automatische Aufbewahrung:** Alle Backups der aktuellen und der letzten vier Kalenderwochen bleiben erhalten (einstellbar); ältere werden auf ein Backup pro Woche ausgedünnt.
+- **Eine Konfigurationsdatei** (`/etc/minibak.conf`), alternativ Kommandozeilenoptionen.
+- **Installer und Deinstaller** mit Rückfrage, Liste aller Systemänderungen und Logdateien.
+- **Logging** mit Stufen (`INFO`, `SUCCESS`, `WARNING`, `ERROR`, `FAILURE`) und aussagekräftigen Exit-Codes.
+- **Keine Abhängigkeiten** außer `rsync` und den üblichen GNU-Werkzeugen. Zum Wiederherstellen ist kein Spezialwerkzeug nötig: Ein Snapshot ist ein gewöhnlicher Verzeichnisbaum.
 
-| Component | Type | Task |
+---
+
+## 2. Systembeschreibung
+
+### 2.1 Systemübersicht
+
+![Systembild](docs/img/de-system.png)
+
+| Komponente | Art | Aufgabe |
 |---|---|---|
-| `install.sh` | Bash script | Installs/removes everything: rsync, script, configuration, systemd units. Logs to `install.log` / `uninstall.log`. |
-| `minibak.sh` → `/usr/bin/minibak` | Bash script | The backup program: parses options, loads the configuration, runs rsync, evaluates its exit code, writes the log, applies the retention rules, and can update the systemd units (`-x`). |
-| `conf` → `/etc/minibak.conf` | Bash fragment | Settings (`dir_src`, `dir_dest`, `bool_timerEnabled`, `dir_log`, `int_keepFullWeeks`) **and** the function that generates the two systemd units. |
-| `/etc/minibak.conf.template` | file | Unchanged copy of the defaults to fall back to. |
-| `minibak.timer` | systemd timer | Fires at 00:00 and 12:00 and starts the service. |
-| `minibak.service` | systemd service (`oneshot`) | Runs `/usr/bin/minibak -c /etc/minibak.conf` once per trigger. Its output goes to the journal. |
-| `rsync` | external program | Does the actual copying (`-aH`, `--link-dest`). |
-| Source (`dir_src`) / backup storage (`dir_dest`) | directories on disk | What is backed up, and where the snapshots are stored. Both must be on filesystems that support hard links (for `dir_dest`: a single filesystem). |
-| `/tmp/minibak/` | temporary directory | Temporary log and the generated unit files. |
-| `<dir_log>/minibak.log` | log file | Permanent log (default `/var/log/minibak.log`). |
+| `install.sh` | Bash-Skript | Installiert/entfernt alles: rsync, Skript, Konfiguration, systemd-Units. Protokolliert in `install.log` / `uninstall.log`. |
+| `minibak.sh` → `/usr/bin/minibak` | Bash-Skript | Das Backup-Programm: wertet Optionen aus, lädt die Konfiguration, startet rsync, wertet dessen Exit-Code aus, schreibt das Log, wendet die Aufbewahrungsregeln an und kann die systemd-Units aktualisieren (`-x`). |
+| `conf` → `/etc/minibak.conf` | Bash-Fragment | Einstellungen (`dir_src`, `dir_dest`, `bool_timerEnabled`, `dir_log`, `int_keepFullWeeks`) **und** die Funktion, die die beiden systemd-Units erzeugt. |
+| `/etc/minibak.conf.template` | Datei | Unveränderte Kopie der Standardwerte zum Zurückfallen. |
+| `minibak.timer` | systemd-Timer | Löst um 00:00 und 12:00 Uhr aus und startet den Service. |
+| `minibak.service` | systemd-Service (`oneshot`) | Führt je Auslösung einmal `/usr/bin/minibak -c /etc/minibak.conf` aus. Die Ausgabe landet im Journal. |
+| `rsync` | externes Programm | Führt das eigentliche Kopieren durch (`-aH`, `--link-dest`). |
+| Quelle (`dir_src`) / Backup-Speicher (`dir_dest`) | Verzeichnisse auf Datenträgern | Was gesichert wird und wo die Snapshots liegen. Beide Dateisysteme müssen Hardlinks unterstützen (für `dir_dest`: ein einziges Dateisystem). |
+| `/tmp/minibak/` | temporäres Verzeichnis | Temporäres Log und die erzeugten Unit-Dateien. |
+| `<dir_log>/minibak.log` | Logdatei | Dauerhaftes Log (Standard `/var/log/minibak.log`). |
 
-**Data flow of a scheduled backup**
+**Datenfluss eines zeitgesteuerten Backups**
 
-1. `minibak.timer` elapses at 00:00 / 12:00 and starts `minibak.service`.
-2. The service executes `/usr/bin/minibak -c /etc/minibak.conf`.
-3. The script sources the configuration, checks source and destination, and creates the directory `dir_dest/backup_<timestamp>`.
-4. It calls `rsync -aH --link-dest=<previous snapshot> dir_src <new snapshot>`. Changed files are copied, unchanged files become hard links.
-5. The exit code of rsync is translated into a log entry. On success the retention function removes snapshots that are no longer needed.
-6. The script ends with the exit code of rsync; systemd records the result and the journal keeps the console output.
+1. `minibak.timer` löst um 00:00 / 12:00 Uhr aus und startet `minibak.service`.
+2. Der Service führt `/usr/bin/minibak -c /etc/minibak.conf` aus.
+3. Das Skript liest die Konfiguration, prüft Quelle und Ziel und legt das Verzeichnis `dir_dest/backup_<Zeitstempel>` an.
+4. Es ruft `rsync -aH --link-dest=<vorheriger Snapshot> dir_src <neuer Snapshot>` auf. Geänderte Dateien werden kopiert, unveränderte werden zu Hardlinks.
+5. Der Exit-Code von rsync wird in einen Log-Eintrag übersetzt. Bei Erfolg entfernt die Aufbewahrungsfunktion nicht mehr benötigte Snapshots.
+6. Das Skript endet mit dem Exit-Code von rsync; systemd hält das Ergebnis fest, das Journal die Konsolenausgabe.
 
-### 2.2 Installed files and directories
+### 2.2 Installierte Dateien und Verzeichnisse
 
-| Path | Created by | Content |
+| Pfad | Angelegt von | Inhalt |
 |---|---|---|
-| `/usr/bin/minibak` | `install.sh` | The backup script (executable) |
-| `/etc/minibak.conf` | `install.sh` | Active configuration (mode 644) |
-| `/etc/minibak.conf.template` | `install.sh` | Copy of the default configuration (mode 644) |
-| `/etc/systemd/system/minibak.service` | `install.sh` / `minibak -x` | Service unit |
-| `/etc/systemd/system/minibak.timer` | `install.sh` / `minibak -x` | Timer unit |
-| `<dir_dest>/backup_YYYY-MM-DD_hh-mm-ss/<name of dir_src>/` | `minibak` | One snapshot per run |
-| `<dir_log>/minibak.log` | `minibak` | Permanent log |
-| `/tmp/minibak/` | both | Temporary files, removed or overwritten at runtime |
-| `install.log`, `uninstall.log` | `install.sh` | In the directory the installer was started from |
+| `/usr/bin/minibak` | `install.sh` | Das Backup-Skript (ausführbar) |
+| `/etc/minibak.conf` | `install.sh` | Aktive Konfiguration (Modus 644) |
+| `/etc/minibak.conf.template` | `install.sh` | Kopie der Standardkonfiguration (Modus 644) |
+| `/etc/systemd/system/minibak.service` | `install.sh` / `minibak -x` | Service-Unit |
+| `/etc/systemd/system/minibak.timer` | `install.sh` / `minibak -x` | Timer-Unit |
+| `<dir_dest>/backup_JJJJ-MM-TT_hh-mm-ss/<Name von dir_src>/` | `minibak` | Ein Snapshot pro Lauf |
+| `<dir_log>/minibak.log` | `minibak` | Dauerhaftes Log |
+| `/tmp/minibak/` | beide | Temporäre Dateien, werden zur Laufzeit entfernt oder überschrieben |
+| `install.log`, `uninstall.log` | `install.sh` | Im Verzeichnis, aus dem der Installer gestartet wurde |
 
-### 2.3 Components
+### 2.3 Komponenten
 
-#### 2.3.1 `minibak.sh` – the backup program
+#### 2.3.1 `minibak.sh` – das Backup-Programm
 
-**Start-up.** If the script is not run by root it replaces itself with `sudo bash "$0" "$@"`:
+**Start.** Wird das Skript nicht als root gestartet, ersetzt es sich selbst durch `sudo bash "$0" "$@"`:
 
 ```bash
 [[ $EUID -ne 0 ]] && exec sudo bash "$0" "$@"
 ```
 
-Then default values and help texts are defined, `/tmp/minibak` is created and the start is written to a *temporary* log. The permanent log directory (`dir_log`) is only known after the configuration has been read, so the log is first collected in `/tmp` and appended to `<dir_log>/minibak.log` as soon as the configuration is loaded.
+Danach werden Standardwerte und Hilfetexte definiert, `/tmp/minibak` angelegt und der Start in ein *temporäres* Log geschrieben. Das dauerhafte Logverzeichnis (`dir_log`) ist erst nach dem Einlesen der Konfiguration bekannt. Deshalb wird zuerst in `/tmp` gesammelt und sofort nach dem Laden der Konfiguration an `<dir_log>/minibak.log` angehängt.
 
-**Options** (`getopts ":s:d:vhHc:x"`):
+**Optionen** (`getopts ":s:d:vhHc:x"`):
 
-| Option | Meaning |
+| Option | Bedeutung |
 |---|---|
-| `-s <dir>`, `-d <dir>` | Source and destination, an alternative to the configuration file |
-| `-c <file>` / `-c default` | Load a configuration file / `/etc/minibak.conf`. Options are processed from left to right, so a later `-s`/`-d` overrides the config and vice versa. |
-| `-x` | Compare the units generated from the configuration with the installed ones, replace them if they differ, reload systemd and enable/start or disable/stop the timer according to `bool_timerEnabled`. **No backup is made.** `-c` has to come first. |
-| `-h`, `-H` | Help / help for the configuration file |
-| `-v` | Reserved (verbose mode), currently without effect |
+| `-s <dir>`, `-d <dir>` | Quelle und Ziel, Alternative zur Konfigurationsdatei |
+| `-c <Datei>` / `-c default` | Konfigurationsdatei laden / `/etc/minibak.conf` laden. Optionen werden von links nach rechts verarbeitet, ein späteres `-s`/`-d` überschreibt also die Konfiguration und umgekehrt. |
+| `-x` | Aus der Konfiguration erzeugte Units mit den installierten vergleichen, bei Abweichung ersetzen, systemd neu laden und den Timer je nach `bool_timerEnabled` aktivieren/starten bzw. deaktivieren/stoppen. **Es wird kein Backup erstellt.** `-c` muss davor stehen. |
+| `-h`, `-H` | Hilfe / Hilfe zur Konfigurationsdatei |
+| `-v` | Reserviert (ausführliche Ausgabe), derzeit ohne Wirkung |
 
-A missing argument or an unknown option prints the usage and exits with code 1.
+Ein fehlendes Argument oder eine unbekannte Option gibt die Hilfe aus und beendet mit Code 1.
 
-**Backup algorithm.** After the options are processed, the script checks that `dir_src` is set and exists and that `dir_dest` is set (creating it if necessary). Then it builds the name of the new snapshot and decides between a full and an incremental copy:
+**Backup-Algorithmus.** Nach der Optionsverarbeitung prüft das Skript, ob `dir_src` gesetzt ist und existiert und ob `dir_dest` gesetzt ist (und legt es bei Bedarf an). Dann bildet es den Namen des neuen Snapshots und entscheidet zwischen vollständiger und inkrementeller Kopie:
 
 ```bash
 if [[ -z "$(ls $dir_dest)" ]]
@@ -124,14 +124,14 @@ if [[ -z "$(ls $dir_dest)" ]]
 fi
 ```
 
-- **Empty destination:** plain copy, `rsync -aH`.
-- **Otherwise:** `rsync -aHv --link-dest=<newest entry of dir_dest> dir_src <new directory>`. `-a` preserves permissions, owners, times and symlinks; `-H` preserves hard links inside the source; `--link-dest` creates hard links to the files of the previous snapshot whenever a file is unchanged.
+- **Leeres Ziel:** einfache Kopie mit `rsync -aH`.
+- **Sonst:** `rsync -aHv --link-dest=<neuester Eintrag in dir_dest> dir_src <neues Verzeichnis>`. `-a` erhält Rechte, Besitzer, Zeiten und Symlinks; `-H` erhält Hardlinks innerhalb der Quelle; `--link-dest` legt für unveränderte Dateien Hardlinks auf den vorherigen Snapshot an.
 
-The newest previous snapshot is found by name (`find … | sort -r | head -n 1`), which works because the timestamp format sorts chronologically. `dir_dest` should therefore contain only minibak snapshots.
+Der neueste vorherige Snapshot wird über den Namen gefunden (`find … | sort -r | head -n 1`). Das funktioniert, weil das Zeitstempelformat chronologisch sortiert. `dir_dest` sollte deshalb nur Minibak-Snapshots enthalten.
 
-**Exit codes.** `func_rsyncExitCode` maps every documented rsync code (0, 1, 2, 3, 4, 5, 6, 10–14, 20, 23, 24, 30, 35, and "unlisted") to a message and a log entry and ends the script with that same code. Only code 0 triggers the retention. Errors before rsync starts (invalid arguments, missing source, destination not creatable, config not found) end with code 1.
+**Exit-Codes.** `func_rsyncExitCode` ordnet jedem dokumentierten rsync-Code (0, 1, 2, 3, 4, 5, 6, 10–14, 20, 23, 24, 30, 35 sowie „nicht aufgeführt“) eine Meldung und einen Log-Eintrag zu und beendet das Skript mit genau diesem Code. Nur Code 0 löst die Aufbewahrung aus. Fehler vor dem rsync-Aufruf (ungültige Argumente, fehlende Quelle, Ziel nicht anlegbar, Konfiguration nicht gefunden) enden mit Code 1.
 
-**Retention (`func_prune`).** It is called after every successful backup.
+**Aufbewahrung (`func_prune`).** Die Funktion wird nach jedem erfolgreichen Backup aufgerufen.
 
 ```bash
 func_prune() {
@@ -184,23 +184,23 @@ func_prune() {
 }
 ```
 
-All snapshots of the *current calendar week and the `int_keepFullWeeks` weeks before it* are kept. For older weeks only the first snapshot of each ISO week is kept (the Monday backup under the default schedule). The cutoff is the Monday of the current week minus `int_keepFullWeeks` weeks, so a week is never cut in half. Only directories named `backup_*` whose name can be parsed are considered, and an invalid `int_keepFullWeeks` disables the cleanup (with a warning) instead of risking a wrong deletion.
+Alle Snapshots der *aktuellen Kalenderwoche und der `int_keepFullWeeks` Wochen davor* bleiben erhalten. Von älteren Wochen bleibt nur der erste Snapshot jeder ISO-Woche (bei Standardzeitplan das Backup vom Montag). Die Grenze ist der Montag der aktuellen Woche minus `int_keepFullWeeks` Wochen, eine Woche wird also nie halbiert. Berücksichtigt werden nur Verzeichnisse mit dem Namen `backup_*`, deren Name sich auswerten lässt. Ein ungültiger Wert für `int_keepFullWeeks` deaktiviert die Bereinigung (mit Warnung), statt eine falsche Löschung zu riskieren.
 
-Example with `int_keepFullWeeks=4` in calendar week 40: weeks 36–40 are kept completely; week 35 and older are reduced to one snapshot per week.
+Beispiel mit `int_keepFullWeeks=4` in Kalenderwoche 40: Die Wochen 36–40 bleiben vollständig erhalten, ab Woche 35 und älter bleibt je Woche ein Snapshot.
 
-**Logging.** Format: `YYYY-MM-DD hh:mm:ss:nanoseconds [LEVEL] message`. The levels are `INFO`, `SUCCESS`, `WARNING`, `ERROR` and `FAILURE`. Every deleted snapshot is logged.
+**Logging.** Format: `JJJJ-MM-TT hh:mm:ss:Nanosekunden [STUFE] Meldung`. Die Stufen sind `INFO`, `SUCCESS`, `WARNING`, `ERROR` und `FAILURE`. Jeder gelöschte Snapshot wird protokolliert.
 
-#### 2.3.2 `conf` – configuration and unit generator
+#### 2.3.2 `conf` – Konfiguration und Unit-Generator
 
-| Variable | Default | Meaning |
+| Variable | Standard | Bedeutung |
 |---|---|---|
-| `dir_src` | `/root` | Directory to back up |
-| `dir_dest` | `/var/backups/minibak` | Backup storage, created if missing. Must not be inside `dir_src`. |
-| `bool_timerEnabled` | `false` | `true`: scheduled backups are enabled and started; `false`: disabled and stopped |
-| `dir_log` | `/var/log` | Directory of `minibak.log`; falls back to `/var/log` if it does not exist |
-| `int_keepFullWeeks` | `4` | Number of full calendar weeks (besides the current one) in which all snapshots are kept |
+| `dir_src` | `/root` | Zu sicherndes Verzeichnis |
+| `dir_dest` | `/var/backups/minibak` | Backup-Speicher, wird bei Bedarf angelegt. Darf nicht innerhalb von `dir_src` liegen. |
+| `bool_timerEnabled` | `false` | `true`: zeitgesteuerte Backups aktiviert und gestartet; `false`: deaktiviert und gestoppt |
+| `dir_log` | `/var/log` | Verzeichnis von `minibak.log`; fällt auf `/var/log` zurück, wenn es nicht existiert |
+| `int_keepFullWeeks` | `4` | Anzahl voller Kalenderwochen (neben der aktuellen), in denen alle Snapshots bleiben |
 
-The file also defines `func_saveSystemdUnitsToTmp`, which writes the two unit files to `/tmp/minibak`. Both the installer and `minibak -x` use it, so the schedule is defined in exactly one place:
+Die Datei definiert außerdem `func_saveSystemdUnitsToTmp`, die die beiden Unit-Dateien nach `/tmp/minibak` schreibt. Installer und `minibak -x` nutzen dieselbe Funktion, der Zeitplan ist also an genau einer Stelle definiert:
 
 ```bash
 func_saveSystemdUnitsToTmp() {
@@ -238,13 +238,13 @@ EOT
 }
 ```
 
-The service is `Type=oneshot` (one run per trigger). `Persistent=false` means a run that was missed while the machine was off is not made up for afterwards.
+Der Service ist `Type=oneshot` (ein Lauf je Auslösung). `Persistent=false` bedeutet, dass ein Lauf, der bei ausgeschaltetem Rechner verpasst wurde, nicht nachgeholt wird.
 
-#### 2.3.3 `install.sh` – installer and uninstaller
+#### 2.3.3 `install.sh` – Installer und Deinstaller
 
-*Installation* (PAP 6): confirmation after showing every change → `apt-get -y install rsync` → copy script and configuration (each copy checked) → `chmod` (script executable, configuration 644) → generate the units from `conf` and install them → `daemon-reload` → `enable --now` or `disable --now` of the timer, depending on `bool_timerEnabled` in the `conf` next to the installer. Every step is written to `install.log`.
+*Installation* (PAP 6): Bestätigung nach Anzeige aller Änderungen → `apt-get -y install rsync` → Skript und Konfiguration kopieren (jede Kopie wird geprüft) → `chmod` (Skript ausführbar, Konfiguration 644) → Units aus `conf` erzeugen und installieren → `daemon-reload` → `enable --now` bzw. `disable --now` für den Timer, abhängig von `bool_timerEnabled` in der `conf` neben dem Installer. Jeder Schritt wird in `install.log` protokolliert.
 
-*Removal* (`./install.sh uninstall`, PAP 7): confirmation → four optional questions (rsync, logs, configuration, `/tmp/minibak`, all default to *no*) → script deleted → timer disabled and stopped → **waits for a running backup to finish**, then stops the service:
+*Entfernen* (`./install.sh uninstall`, PAP 7): Bestätigung → vier optionale Fragen (rsync, Logs, Konfiguration, `/tmp/minibak`, jeweils Standard *nein*) → Skript löschen → Timer deaktivieren und stoppen → **auf ein laufendes Backup warten**, danach den Service stoppen:
 
 ```bash
 				while [[ $(systemctl is-active minibak.service) == "active" || $(systemctl is-active minibak.service) == "activating" ]]
@@ -253,189 +253,189 @@ The service is `Type=oneshot` (one run per trigger). `Persistent=false` means a 
 					done
 ```
 
-→ unit files deleted → `daemon-reload`, `reset-failed` → the optional deletions. The backups themselves are never touched. Repeating the removal is safe; missing items only cause warnings. Everything is logged to `uninstall.log`.
+→ Unit-Dateien löschen → `daemon-reload`, `reset-failed` → die optionalen Löschungen. Die Backups selbst werden nie angefasst. Das erneute Ausführen ist unkritisch, fehlende Elemente erzeugen nur Warnungen. Alles wird in `uninstall.log` protokolliert.
 
-#### 2.3.4 The systemd units
+#### 2.3.4 Die systemd-Units
 
-`minibak.timer` triggers `minibak.service` at 00:00 and 12:00 (`OnCalendar=Mon..Sun *-*-* 00:00:00` and `… 12:00:00`). The service runs `ExecStart=/usr/bin/minibak -c /etc/minibak.conf`. Both are installed to `/etc/systemd/system/` and are always regenerated from the configuration, so they should not be edited by hand.
+`minibak.timer` löst `minibak.service` um 00:00 und 12:00 Uhr aus (`OnCalendar=Mon..Sun *-*-* 00:00:00` und `… 12:00:00`). Der Service führt `ExecStart=/usr/bin/minibak -c /etc/minibak.conf` aus. Beide liegen in `/etc/systemd/system/` und werden immer aus der Konfiguration neu erzeugt, sie sollten daher nicht von Hand bearbeitet werden.
 
-### 2.4 Flowcharts (PAP)
+### 2.4 Ablaufpläne (PAP)
 
-The flowcharts follow DIN 66001: rounded boxes are start/end, rectangles are operations, diamonds are decisions, parallelograms are output, and rectangles with side bars are sub-programs described in their own chart.
+Die Ablaufpläne folgen DIN 66001: Abgerundete Kästen sind Start/Ende, Rechtecke sind Operationen, Rauten sind Verzweigungen, Parallelogramme sind Ausgaben und Rechtecke mit Seitenbalken sind Unterprogramme, die in einem eigenen Plan beschrieben sind.
 
-**PAP 1 – main program of `minibak.sh`**
+**PAP 1 – Hauptprogramm von `minibak.sh`**
 
-![PAP 1](docs/img/en-pap1-main.png)
+![PAP 1](docs/img/de-pap1-main.png)
 
-**PAP 2 – option processing**
+**PAP 2 – Optionsverarbeitung**
 
-![PAP 2](docs/img/en-pap2-options.png)
+![PAP 2](docs/img/de-pap2-options.png)
 
-**PAP 3 – `-c`, load configuration**
+**PAP 3 – `-c`, Konfiguration laden**
 
-![PAP 3](docs/img/en-pap3-config.png)
+![PAP 3](docs/img/de-pap3-config.png)
 
-**PAP 4 – `-x`, update systemd units**
+**PAP 4 – `-x`, systemd-Units aktualisieren**
 
-![PAP 4](docs/img/en-pap4-units.png)
+![PAP 4](docs/img/de-pap4-units.png)
 
-**PAP 5 – retention (`func_prune`)**
+**PAP 5 – Aufbewahrung (`func_prune`)**
 
-![PAP 5](docs/img/en-pap5-retention.png)
+![PAP 5](docs/img/de-pap5-retention.png)
 
-**PAP 6 – `install.sh`, installation**
+**PAP 6 – `install.sh`, Installation**
 
-![PAP 6](docs/img/en-pap6-install.png)
+![PAP 6](docs/img/de-pap6-install.png)
 
-**PAP 7 – `install.sh uninstall`, removal**
+**PAP 7 – `install.sh uninstall`, Deinstallation**
 
-![PAP 7](docs/img/en-pap7-uninstall.png)
+![PAP 7](docs/img/de-pap7-uninstall.png)
 
-The Graphviz sources of all diagrams are in `docs/src/` (`dot -Tpng file.dot -o file.png`).
+Die Graphviz-Quellen aller Diagramme liegen in `docs/src/` (`dot -Tpng datei.dot -o datei.png`).
 
-### 2.5 Design decisions
+### 2.5 Entwurfsentscheidungen
 
-| Topic | Decision | Alternatives and reasons |
+| Thema | Entscheidung | Alternativen und Begründung |
 |---|---|---|
-| Scheduling | **systemd timer** + `oneshot` service | *cron* is simpler and available everywhere, but has no built-in logging, no view of last/next run and no unit semantics. With systemd the output lands in the journal automatically, `systemctl list-timers` shows the schedule, enabling/disabling is one command, and a timer does not start a second instance of a service that is still running. systemd is the default on Debian/Ubuntu. On systems without systemd a cron entry would have to replace the unit generator. |
-| Copy tool | **rsync** | `cp`/`tar` would copy everything every time or need a complicated incremental scheme. rsync transfers only differences, preserves attributes (`-a`), hard links (`-H`) and offers `--link-dest`. Borg/restic add deduplication and encryption but are extra dependencies and their repositories cannot be browsed or restored with standard tools. `rsnapshot` implements the same idea, but a short own script is transparent and has no extra dependency. |
-| Snapshot layout | **one directory per run, unchanged files hard-linked** | Every snapshot is complete and browsable, restoring is a plain copy, deleting one snapshot never damages another, and no index/database is needed. The timestamp name sorts chronologically, so "latest" and "oldest" need no metadata. Price: `dir_dest` must be a single filesystem. |
-| Retention | **thinning by ISO calendar week, after successful runs only** | Required behaviour: keep everything for four weeks, then one backup per week. Cutting at a Monday keeps weeks whole. A pure *age* rule ("delete older than 30 days") would delete all backups if the timer stopped for a month; the week rule always keeps at least one backup per week and the newest ones. Deriving the number of kept snapshots from the timer schedule was considered and rejected: parsing `OnCalendar` is complex and a wrong result would delete backups. Cleanup runs only after rsync returned 0, so a failed run never removes older backups. |
-| Configuration | **sourced Bash file** | No parser to write or maintain, comments and the unit function fit in the same file. Drawback: the file is executed as root, so it must be root-owned and writable only by root (the installer sets 644). A `key=value` parser would be safer but needs more code and still needs a place for the unit generator. |
-| Unit generator in the config | **function in `conf`, used by installer and `-x`** | One source of truth for the schedule. `-x` compares generated and installed units, so changing the schedule means editing one file and running one command. |
-| Logging | **temporary log in `/tmp`, merged into `dir_log` after the config is loaded** | `dir_log` is unknown before the configuration is read, but errors in this phase must be logged too. If `dir_log` does not exist, `/var/log` is used. |
-| Privileges | **`exec sudo bash "$0" "$@"` at the top of each script** | Users do not have to remember `sudo`. `exec` replaces the process, so nothing runs twice; `bash "$0"` works however the script was started; and, unlike passing a single function to `sudo bash -c`, all variables and texts exist in the root run. |
-| Exit codes | **rsync's exit code is passed through** | systemd and the journal show the true result of a scheduled run. |
-| Error handling | `set -o pipefail`, `if ! command \| tee -a log` | Every critical step is both logged and checked: `pipefail` makes the pipeline report the failure of `cp`/`rm`, not of `tee`. |
-| Safety of the installer | **intro lists all changes; uninstall questions default to "no"** | Nothing is deleted without consent; backups, configuration and rsync are only removed on request. |
-| Defaults | `dir_dest` outside `dir_src`; `bool_timerEnabled=false` | Prevents a backup that copies itself; the schedule starts only when the administrator chooses. |
-| `Persistent=false` | Missed runs are not made up | Avoids a burst of backups at boot; with a 12-hour interval the next run follows soon. Can be changed in the unit generator. |
+| Zeitsteuerung | **systemd-Timer** + `oneshot`-Service | *cron* ist einfacher und überall verfügbar, bietet aber kein eingebautes Logging, keine Anzeige des letzten/nächsten Laufs und keine Unit-Semantik. Mit systemd landet die Ausgabe automatisch im Journal, `systemctl list-timers` zeigt den Zeitplan, Aktivieren/Deaktivieren ist ein Befehl, und ein Timer startet keine zweite Instanz eines Services, der noch läuft. systemd ist unter Debian/Ubuntu der Standard. Auf Systemen ohne systemd müsste ein cron-Eintrag den Unit-Generator ersetzen. |
+| Kopierwerkzeug | **rsync** | `cp`/`tar` würden jedes Mal alles kopieren oder ein aufwendiges Inkrementschema brauchen. rsync überträgt nur Unterschiede, erhält Attribute (`-a`) und Hardlinks (`-H`) und bietet `--link-dest`. Borg/restic bringen Deduplizierung und Verschlüsselung mit, sind aber zusätzliche Abhängigkeiten, und ihre Repositories lassen sich nicht mit Standardwerkzeugen durchsuchen oder wiederherstellen. `rsnapshot` setzt dieselbe Idee um, ein kurzes eigenes Skript ist aber transparent und ohne weitere Abhängigkeit. |
+| Snapshot-Aufbau | **ein Verzeichnis pro Lauf, unveränderte Dateien per Hardlink** | Jeder Snapshot ist vollständig und durchsuchbar, Wiederherstellen ist ein einfaches Kopieren, das Löschen eines Snapshots beschädigt nie einen anderen, und es wird kein Index und keine Datenbank benötigt. Der Zeitstempel im Namen sortiert chronologisch, „neuester“ und „ältester“ brauchen daher keine Metadaten. Preis: `dir_dest` muss ein einziges Dateisystem sein. |
+| Aufbewahrung | **Ausdünnen nach ISO-Kalenderwochen, nur nach erfolgreichen Läufen** | Gefordertes Verhalten: vier Wochen alles behalten, danach ein Backup pro Woche. Der Schnitt am Montag erhält Wochen vollständig. Eine reine *Altersregel* („älter als 30 Tage löschen“) würde alle Backups löschen, wenn der Timer einen Monat stillsteht; die Wochenregel behält immer mindestens ein Backup pro Woche und die neuesten. Die Anzahl der zu behaltenden Snapshots aus dem Timer-Zeitplan abzuleiten wurde erwogen und verworfen: `OnCalendar` zu parsen ist aufwendig, und ein falsches Ergebnis würde Backups löschen. Die Bereinigung läuft nur, wenn rsync 0 zurückgab, ein fehlgeschlagener Lauf entfernt also nie ältere Backups. |
+| Konfiguration | **eingelesene (gesourcte) Bash-Datei** | Kein Parser, der geschrieben und gepflegt werden muss; Kommentare und die Unit-Funktion passen in dieselbe Datei. Nachteil: Die Datei wird als root ausgeführt, sie muss also root gehören und darf nur von root beschreibbar sein (der Installer setzt 644). Ein `key=value`-Parser wäre sicherer, bräuchte aber mehr Code und noch immer einen Platz für den Unit-Generator. |
+| Unit-Generator in der Konfiguration | **Funktion in `conf`, genutzt von Installer und `-x`** | Eine einzige Quelle für den Zeitplan. `-x` vergleicht erzeugte und installierte Units, eine Änderung des Zeitplans heißt also: eine Datei bearbeiten, einen Befehl ausführen. |
+| Logging | **temporäres Log in `/tmp`, nach dem Laden der Konfiguration in `dir_log` übernommen** | `dir_log` ist vor dem Einlesen der Konfiguration unbekannt, Fehler in dieser Phase müssen aber ebenfalls protokolliert werden. Existiert `dir_log` nicht, wird `/var/log` verwendet. |
+| Rechte | **`exec sudo bash "$0" "$@"` am Anfang jedes Skripts** | Anwender müssen nicht an `sudo` denken. `exec` ersetzt den Prozess, es läuft also nichts doppelt; `bash "$0"` funktioniert unabhängig vom Aufruf; und anders als bei der Übergabe einer einzelnen Funktion an `sudo bash -c` sind im root-Lauf alle Variablen und Texte vorhanden. |
+| Exit-Codes | **Exit-Code von rsync wird durchgereicht** | systemd und Journal zeigen das tatsächliche Ergebnis eines zeitgesteuerten Laufs. |
+| Fehlerbehandlung | `set -o pipefail`, `if ! Befehl \| tee -a Log` | Jeder kritische Schritt wird protokolliert und geprüft: `pipefail` sorgt dafür, dass die Pipeline den Fehler von `cp`/`rm` meldet und nicht den von `tee`. |
+| Sicherheit des Installers | **Einleitung listet alle Änderungen; Fragen der Deinstallation stehen auf „nein“** | Ohne Zustimmung wird nichts gelöscht; Backups, Konfiguration und rsync werden nur auf Wunsch entfernt. |
+| Standardwerte | `dir_dest` außerhalb von `dir_src`; `bool_timerEnabled=false` | Verhindert ein Backup, das sich selbst kopiert; der Zeitplan startet nur, wenn der Administrator es entscheidet. |
+| `Persistent=false` | Verpasste Läufe werden nicht nachgeholt | Vermeidet einen Schwall an Backups beim Booten; bei 12 Stunden Abstand folgt der nächste Lauf bald. Im Unit-Generator änderbar. |
 
 ---
 
-## 3. Source code
+## 3. Quelltexte
 
-| File | Lines | Purpose |
+| Datei | Zeilen | Zweck |
 |---|---|---|
-| `minibak.sh` | 448 | Backup program |
-| `install.sh` | 361 | Installer / uninstaller |
-| `conf` | 61 | Default configuration and unit generator |
-| `tests/vmtest.sh` | 145 | Automated test for a VM (52 checks) |
+| `minibak.sh` | 448 | Backup-Programm |
+| `install.sh` | 361 | Installer / Deinstaller |
+| `conf` | 61 | Standardkonfiguration und Unit-Generator |
+| `tests/vmtest.sh` | 145 | Automatischer Test für eine VM (52 Prüfungen) |
 
-Conventions used in all scripts:
+Konventionen in allen Skripten:
 
-- Section comments at the top of each code block explain *why*, not just *what*; user-facing texts are kept in variables at the top.
-- Every critical action is checked, logged with a level and has a defined exit code.
-- Nested blocks are indented, `then`/`else`/`fi` stand on their own lines for readability.
-- Variable prefixes show the type: `dir_` directory, `bool_` flag, `int_` number, `func_` function, `text_` message text.
+- Abschnittskommentare erklären das *Warum*, nicht nur das *Was*; Texte für Anwender stehen in Variablen am Anfang.
+- Jede kritische Aktion wird geprüft, mit einer Stufe protokolliert und hat einen festgelegten Exit-Code.
+- Verschachtelte Blöcke sind eingerückt, `then`/`else`/`fi` stehen zur besseren Lesbarkeit in eigenen Zeilen.
+- Variablenpräfixe zeigen den Typ: `dir_` Verzeichnis, `bool_` Schalter, `int_` Zahl, `func_` Funktion, `text_` Meldungstext.
 
-The complete, commented sources are in the [appendix](#appendix-source-code) and in the repository files; excerpts are shown in section 2.3.
+Die vollständigen, kommentierten Quelltexte stehen im [Anhang](#anhang-quelltexte) und in den Dateien des Projekts; Auszüge zeigt Abschnitt 2.3. Die Kommentare in den Quelltexten sind englisch.
 
 ---
 
-## 4. Customer documentation: installation and operation
+## 4. Kundendokumentation: Installation und Bedienung
 
-### 4.1 Requirements
+### 4.1 Voraussetzungen
 
-- Debian or Ubuntu with systemd (tested on Debian 13)
-- Root access (the scripts ask for `sudo` themselves)
-- Internet or a local mirror to install `rsync` (skipped if already installed)
-- Enough space on the backup storage for the first full copy plus the changes
+- Debian oder Ubuntu mit systemd (getestet unter Debian 13)
+- Root-Zugriff (die Skripte fordern `sudo` selbst an)
+- Internet oder lokaler Mirror zur Installation von `rsync` (entfällt, wenn bereits installiert)
+- Genug Platz im Backup-Speicher für die erste vollständige Kopie plus die Änderungen
 
 ### 4.2 Installation
 
-1. Copy `install.sh`, `minibak.sh` and `conf` into **one directory**.
-2. Edit `conf` (the installer copies it to `/etc/minibak.conf`):
+1. `install.sh`, `minibak.sh` und `conf` in **ein Verzeichnis** kopieren.
+2. `conf` bearbeiten (der Installer kopiert sie nach `/etc/minibak.conf`):
    ```bash
-   nano conf          # set dir_src, dir_dest, bool_timerEnabled=true, ...
+   nano conf          # dir_src, dir_dest, bool_timerEnabled=true, ... setzen
    ```
-3. Run the installer and confirm with `y`:
+3. Installer starten und mit `y` bestätigen:
    ```bash
    chmod +x install.sh
    ./install.sh
    ```
-4. Check the result:
+4. Ergebnis prüfen:
    ```bash
    ls -l /usr/bin/minibak /etc/minibak.conf /etc/systemd/system/minibak.*
-   systemctl list-timers minibak.timer     # next run (if bool_timerEnabled=true)
+   systemctl list-timers minibak.timer     # nächster Lauf (wenn bool_timerEnabled=true)
    ```
 
-> **Re-running the installer overwrites `/usr/bin/minibak` and `/etc/minibak.conf`.** Back up your configuration first if you changed it after the installation.
+> **Ein erneuter Aufruf des Installers überschreibt `/usr/bin/minibak` und `/etc/minibak.conf`.** Sichern Sie die Konfiguration vorher, wenn sie nach der Installation geändert wurde.
 
-### 4.3 Configuration
+### 4.3 Konfiguration
 
-Edit `/etc/minibak.conf` (see the table in 2.3.2). A pristine copy is in `/etc/minibak.conf.template`. `minibak -H` prints a short help.
+`/etc/minibak.conf` bearbeiten (siehe Tabelle in 2.3.2). Eine unveränderte Kopie liegt in `/etc/minibak.conf.template`. `minibak -H` gibt eine kurze Hilfe aus.
 
-### 4.4 Running a backup
+### 4.4 Ein Backup ausführen
 
 ```bash
-minibak -c default                       # with /etc/minibak.conf
-minibak -c /path/to/other.conf           # with another configuration
-minibak -s /home/me/docs -d /mnt/backup  # without a configuration file
-sudo systemctl start minibak.service     # the way the timer does it
+minibak -c default                       # mit /etc/minibak.conf
+minibak -c /pfad/zur/anderen.conf        # mit einer anderen Konfiguration
+minibak -s /home/me/docs -d /mnt/backup  # ohne Konfigurationsdatei
+sudo systemctl start minibak.service     # so wie es der Timer tut
 ```
 
-### 4.5 Scheduling
+### 4.5 Zeitsteuerung
 
-With `bool_timerEnabled=true` the installer enables **and starts** the timer.
+Mit `bool_timerEnabled=true` aktiviert der Installer den Timer **und startet ihn**.
 
-| Task | Command |
+| Aufgabe | Befehl |
 |---|---|
-| Show next/last run | `systemctl list-timers minibak.timer` |
-| Change the times | edit the `OnCalendar=` lines in `/etc/minibak.conf`, then `minibak -c default -x` |
-| Switch scheduling on/off | set `bool_timerEnabled` to `true`/`false` in `/etc/minibak.conf`, then `minibak -c default -x` |
-| Scheduled run output | `sudo journalctl -u minibak.service` |
+| Nächsten/letzten Lauf anzeigen | `systemctl list-timers minibak.timer` |
+| Zeiten ändern | `OnCalendar=`-Zeilen in `/etc/minibak.conf` ändern, dann `minibak -c default -x` |
+| Zeitsteuerung ein-/ausschalten | `bool_timerEnabled` in `/etc/minibak.conf` auf `true`/`false` setzen, dann `minibak -c default -x` |
+| Ausgabe zeitgesteuerter Läufe | `sudo journalctl -u minibak.service` |
 
-`-x` replaces the changed unit, reloads systemd and restarts the timer; it does not make a backup. Do not edit the files in `/etc/systemd/system` by hand.
+`-x` ersetzt die geänderte Unit, lädt systemd neu und startet den Timer neu; ein Backup wird dabei nicht erstellt. Dateien in `/etc/systemd/system` nicht von Hand bearbeiten.
 
-### 4.6 Restoring data
+### 4.6 Daten wiederherstellen
 
-Every snapshot is a complete directory tree below `<dir_dest>/backup_<timestamp>/<name of dir_src>/`.
+Jeder Snapshot ist ein vollständiger Verzeichnisbaum unter `<dir_dest>/backup_<Zeitstempel>/<Name von dir_src>/`.
 
 ```bash
-ls /var/backups/minibak                                           # list snapshots
-# restore everything of one snapshot:
-sudo rsync -aH /var/backups/minibak/backup_2026-10-02_12-00-04/root/ /restore/target/
-# restore a single file or directory:
+ls /var/backups/minibak                                           # Snapshots auflisten
+# kompletten Snapshot wiederherstellen:
+sudo rsync -aH /var/backups/minibak/backup_2026-10-02_12-00-04/root/ /restore/ziel/
+# einzelne Datei oder einzelnes Verzeichnis wiederherstellen:
 sudo cp -a /var/backups/minibak/backup_2026-10-02_12-00-04/root/etc/hosts /tmp/
 ```
 
-(`root` is the name of the directory that was backed up, here `/root`.) Restore into a new directory first and compare, instead of overwriting live data.
+(`root` ist der Name des gesicherten Verzeichnisses, hier `/root`.) Stellen Sie zuerst in ein neues Verzeichnis wieder her und vergleichen Sie, statt Livedaten zu überschreiben.
 
-### 4.7 Monitoring
+### 4.7 Überwachung
 
-| What | Where |
+| Was | Wo |
 |---|---|
-| Permanent log | `/var/log/minibak.log` (or `<dir_log>/minibak.log`) |
-| Output of scheduled runs | `journalctl -u minibak.service` |
-| Result of the last scheduled run | `systemctl status minibak.service` (`status=0/SUCCESS`) |
-| Installation/removal | `install.log`, `uninstall.log` |
+| Dauerhaftes Log | `/var/log/minibak.log` (bzw. `<dir_log>/minibak.log`) |
+| Ausgabe zeitgesteuerter Läufe | `journalctl -u minibak.service` |
+| Ergebnis des letzten zeitgesteuerten Laufs | `systemctl status minibak.service` (`status=0/SUCCESS`) |
+| Installation/Entfernen | `install.log`, `uninstall.log` |
 
-Look for lines with `[ERROR]` or `[FAILURE]`. The exit code of `minibak` is the exit code of rsync (0 = success).
+Achten Sie auf Zeilen mit `[ERROR]` oder `[FAILURE]`. Der Exit-Code von `minibak` ist der Exit-Code von rsync (0 = Erfolg).
 
-### 4.8 Updating and removing
+### 4.8 Aktualisieren und Entfernen
 
-- **Update:** save `/etc/minibak.conf`, run the new `./install.sh`, restore your configuration, run `minibak -c default -x`.
-- **Removal:** `./install.sh uninstall`. It asks four optional questions (default no). Backups are never deleted by the uninstaller; delete `dir_dest` yourself when it is no longer needed.
+- **Aktualisieren:** `/etc/minibak.conf` sichern, das neue `./install.sh` ausführen, die Konfiguration wiederherstellen, `minibak -c default -x` ausführen.
+- **Entfernen:** `./install.sh uninstall`. Es stellt vier optionale Fragen (Standard nein). Backups löscht der Deinstaller nie; löschen Sie `dir_dest` selbst, wenn es nicht mehr gebraucht wird.
 
-### 4.9 Troubleshooting
+### 4.9 Fehlersuche
 
-| Symptom | Cause / remedy |
+| Symptom | Ursache / Abhilfe |
 |---|---|
-| `Error: No directory to be backed up has been provided` | `dir_src` is empty; set it in the config or use `-s`. |
-| `The config file ... does not exist` | Wrong path for `-c`; `-c default` needs `/etc/minibak.conf`. |
-| `Source directory <...> does not exist` | `dir_src` points to a missing directory. |
-| `Creation of the destination directory has failed` | No permission or no space; check `dir_dest`. |
-| rsync exit code 23/24 in the log | Some files could not be read or vanished during the copy; see the console/journal output. |
-| No scheduled runs | `bool_timerEnabled` is `false`, or `-x` was not run after changing it; check `systemctl list-timers`. |
-| Backups take as much space as the source | `dir_dest` is on a different filesystem than expected or the previous snapshot was not found (dir_dest contains other files). Keep `dir_dest` dedicated to minibak. |
-| Old snapshots are not removed | Retention runs only after successful backups; check the log for `Retention:` lines and `int_keepFullWeeks`. |
+| `Error: No directory to be backed up has been provided` | `dir_src` ist leer; in der Konfiguration setzen oder `-s` verwenden. |
+| `The config file ... does not exist` | Falscher Pfad bei `-c`; `-c default` benötigt `/etc/minibak.conf`. |
+| `Source directory <...> does not exist` | `dir_src` zeigt auf ein nicht vorhandenes Verzeichnis. |
+| `Creation of the destination directory has failed` | Keine Berechtigung oder kein Platz; `dir_dest` prüfen. |
+| rsync-Exit-Code 23/24 im Log | Einige Dateien waren nicht lesbar oder verschwanden während des Kopierens; Konsolen-/Journalausgabe ansehen. |
+| Keine zeitgesteuerten Läufe | `bool_timerEnabled` ist `false`, oder `-x` wurde nach der Änderung nicht ausgeführt; `systemctl list-timers` prüfen. |
+| Backups belegen so viel Platz wie die Quelle | `dir_dest` liegt auf einem anderen Dateisystem als erwartet, oder der vorherige Snapshot wurde nicht gefunden (`dir_dest` enthält andere Dateien). `dir_dest` nur für Minibak verwenden. |
+| Alte Snapshots werden nicht entfernt | Die Aufbewahrung läuft nur nach erfolgreichen Backups; im Log nach `Retention:`-Zeilen und `int_keepFullWeeks` sehen. |
 
 ---
 
-## 5. Testing and verification
+## 5. Test und Verifikation
 
-Static checks: all scripts pass `bash -n`. Functional checks: `tests/vmtest.sh` is an automated test for a throw-away Debian/Ubuntu VM (it installs and removes the product, so use a snapshot). It runs **52 checks**; all passed on a Debian 13 VM with systemd.
+Statische Prüfung: Alle Skripte bestehen `bash -n`. Funktionsprüfung: `tests/vmtest.sh` ist ein automatischer Test für eine Wegwerf-VM mit Debian/Ubuntu (er installiert und entfernt das Produkt, daher einen Snapshot verwenden). Er führt **52 Prüfungen** aus; alle bestanden auf einer Debian-13-VM mit systemd.
 
 ```bash
 bash tests/vmtest.sh 2>&1 | tee vmtest.log
@@ -443,42 +443,42 @@ bash tests/vmtest.sh 2>&1 | tee vmtest.log
 
 ---
 
-| Area | What is verified |
+| Bereich | Was geprüft wird |
 |---|---|
-| Installation (as normal user) | sudo restart, files and permissions, unit contents without quoting errors, timer enabled and running with the right schedule, clean `install.log` |
-| Backups | first full copy, incremental copy, hard links for unchanged files, changed file gets its own copy, old snapshot keeps the old content, nested directories, run through the systemd service |
-| Retention | 80 days of simulated backups (two per day): at most one backup per old week, every old week keeps one, the kept one is the first of its week, all backups of the fully kept weeks survive, today's backups survive |
-| `-x` | changed timer detected and replaced, running timer takes the new schedule, no backup is made, `bool_timerEnabled` switches the timer off and on, no `ERROR`/`FAILURE` in the log |
-| Options | `-h`, missing argument, unknown option, missing configuration file |
-| Uninstallation | waits for a running 20-second job, removes script and units, keeps config/log/rsync when answered "no", removes them when answered "yes", can be run twice, backups untouched |
+| Installation (als normaler Benutzer) | sudo-Neustart, Dateien und Rechte, Unit-Inhalte ohne Quoting-Fehler, Timer aktiviert und laufend mit dem richtigen Zeitplan, fehlerfreies `install.log` |
+| Backups | erste vollständige Kopie, inkrementelle Kopie, Hardlinks für unveränderte Dateien, geänderte Datei erhält eigene Kopie, alter Snapshot behält den alten Inhalt, verschachtelte Verzeichnisse, Lauf über den systemd-Service |
+| Aufbewahrung | 80 Tage simulierter Backups (zwei pro Tag): höchstens ein Backup je alter Woche, jede alte Woche behält eines, das behaltene ist das erste der Woche, alle Backups der vollständig behaltenen Wochen bleiben, die heutigen Backups bleiben |
+| `-x` | geänderter Timer wird erkannt und ersetzt, laufender Timer übernimmt den neuen Zeitplan, kein Backup wird erstellt, `bool_timerEnabled` schaltet den Timer aus und ein, kein `ERROR`/`FAILURE` im Log |
+| Optionen | `-h`, fehlendes Argument, unbekannte Option, fehlende Konfigurationsdatei |
+| Deinstallation | wartet auf einen laufenden 20-Sekunden-Job, entfernt Skript und Units, behält Konfiguration/Log/rsync bei „nein“, entfernt sie bei „ja“, kann zweimal ausgeführt werden, Backups unberührt |
 
-Testing was done in several rounds; it found real defects that reading the code did not: the installer enabled the timer but never started it, `-x` did not notice a changed timer, and the config files were installed as executable. All were fixed and the final run is clean.
-
----
-
-## 6. Conclusion
-
-**Result.** Minibak meets the requirements: it creates incremental, directly restorable snapshots with rsync, runs on a schedule through systemd, keeps the last four weeks in full and thins older backups to one per week, and can be installed, updated and removed with one script each. The final automated test on a real systemd system passed in all 52 checks.
-
-**Why the design works.** Hard-linked snapshots make the data format trivial: restoring needs no tool, snapshots are independent, and the retention can delete any of them safely. Putting the schedule in the configuration (with the unit generator) keeps the whole system controllable from one file. Cleaning up only after a successful run and passing rsync's exit code through make failures visible instead of silent.
-
-**Limitations.**
-
-- No lock file: a manual run started while a scheduled run is active is not prevented. (systemd itself does not start the service twice.)
-- The newest entry of `dir_dest` is used as the previous snapshot, so `dir_dest` should contain only minibak snapshots.
-- No compression, encryption or integrity check of the snapshots; backups on the same disk as the source do not protect against a disk failure.
-- `-v` is accepted but not implemented; the uninstaller removes only `/var/log/minibak.log`, not a log in a custom `dir_log`.
-- Debian/Ubuntu only (`apt-get`, systemd).
-
-**Possible extensions.** Backups to a remote host over SSH (rsync supports it), notification on failure (mail or `OnFailure=` in the service), a lock with `flock`, a verbose mode, retention by size, and packaging as a `.deb`.
-
-**Lessons learned.** Testing on a real system early is worth more than careful reading: the most serious defects (timer never started, schedule changes not applied) only appeared when systemd was involved. Bash pitfalls such as `[[ variable ]]` (always true without `$` and a comparison), `$?` after a pipe, and variables not surviving `sudo bash -c` shaped the final style: explicit checks, one pattern for "log and test", and a restart with `exec sudo` instead of passing functions.
+Getestet wurde in mehreren Runden. Dabei wurden echte Fehler gefunden, die das Lesen des Codes nicht gezeigt hatte: Der Installer aktivierte den Timer, startete ihn aber nie; `-x` erkannte einen geänderten Timer nicht; die Konfigurationsdateien wurden ausführbar installiert. Alle wurden behoben, der letzte Durchlauf ist fehlerfrei.
 
 ---
 
-## Appendix: source code
+## 6. Fazit
 
-All comments in the sources are in English.
+**Ergebnis.** Minibak erfüllt die Anforderungen: Es erstellt inkrementelle, direkt wiederherstellbare Snapshots mit rsync, läuft über systemd zeitgesteuert, behält die letzten vier Wochen vollständig und dünnt ältere Backups auf eines pro Woche aus und lässt sich mit je einem Skript installieren, aktualisieren und entfernen. Der abschließende automatische Test auf einem echten systemd-System bestand alle 52 Prüfungen.
+
+**Warum der Entwurf trägt.** Durch Snapshots mit Hardlinks ist das Datenformat trivial: Zum Wiederherstellen ist kein Werkzeug nötig, Snapshots sind voneinander unabhängig, und die Aufbewahrung kann jeden davon gefahrlos löschen. Der Zeitplan in der Konfiguration (mit dem Unit-Generator) macht das ganze System aus einer Datei steuerbar. Bereinigung nur nach erfolgreichem Lauf und das Durchreichen des rsync-Exit-Codes machen Fehler sichtbar statt stumm.
+
+**Einschränkungen.**
+
+- Keine Sperrdatei: Ein manueller Lauf, der während eines zeitgesteuerten Laufs gestartet wird, wird nicht verhindert. (systemd selbst startet den Service nicht doppelt.)
+- Der neueste Eintrag in `dir_dest` gilt als vorheriger Snapshot, `dir_dest` sollte daher nur Minibak-Snapshots enthalten.
+- Keine Kompression, Verschlüsselung oder Integritätsprüfung der Snapshots; Backups auf demselben Datenträger wie die Quelle schützen nicht vor einem Plattenausfall.
+- `-v` wird akzeptiert, ist aber nicht umgesetzt; der Deinstaller entfernt nur `/var/log/minibak.log`, kein Log in einem eigenen `dir_log`.
+- Nur Debian/Ubuntu (`apt-get`, systemd).
+
+**Mögliche Erweiterungen.** Backups auf einen entfernten Rechner über SSH (rsync unterstützt das), Benachrichtigung bei Fehlern (Mail oder `OnFailure=` im Service), eine Sperre mit `flock`, ein ausführlicher Modus, Aufbewahrung nach Größe sowie ein `.deb`-Paket.
+
+**Gelerntes.** Das frühe Testen auf einem echten System ist mehr wert als sorgfältiges Lesen: Die schwerwiegendsten Fehler (Timer nie gestartet, Zeitplanänderungen nicht übernommen) zeigten sich erst, als systemd beteiligt war. Bash-Fallstricke wie `[[ variable ]]` (ohne `$` und Vergleich immer wahr), `$?` nach einer Pipe und Variablen, die ein `sudo bash -c` nicht überstehen, haben den endgültigen Stil geprägt: explizite Prüfungen, ein einheitliches Muster für „protokollieren und prüfen“ und ein Neustart per `exec sudo`, statt Funktionen zu übergeben.
+
+---
+
+## Anhang: Quelltexte
+
+Alle Kommentare in den Quelltexten sind englisch.
 
 ### A. `minibak.sh`
 

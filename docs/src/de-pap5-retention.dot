@@ -1,0 +1,37 @@
+digraph G {
+  graph [rankdir=TB, nodesep=0.45, ranksep=0.32, fontname="DejaVu Sans", labelloc=t, fontsize=14, label="PAP 5: Aufbewahrung (func_prune)", pad=0.3];
+  node [fontname="DejaVu Sans", fontsize=11, margin="0.16,0.08"];
+  edge [fontname="DejaVu Sans", fontsize=10];
+  s [shape=box, style="rounded,filled", fillcolor="#dfe9f7", label="Start func_prune"];
+  d1 [shape=diamond, style=filled, fillcolor="#fff4d6", label="int_keepFullWeeks eine\npositive ganze Zahl?"];
+  w [shape=parallelogram, style=filled, fillcolor="#e6f4e6", label="Warnung ins Log"];
+  cut [shape=box, style=filled, fillcolor="#ffffff", label="thisMonday = Montag der aktuellen ISO-Woche\ncutoff = thisMonday - int_keepFullWeeks Wochen"];
+  ls [shape=box, style=filled, fillcolor="#ffffff", label="Verzeichnisse backup_* in dir_dest\nauflisten, älteste zuerst"];
+  d2 [shape=diamond, style=filled, fillcolor="#fff4d6", label="weiteres Verzeichnis?"];
+  parse [shape=box, style=filled, fillcolor="#ffffff", label="Datum und Uhrzeit\naus dem Namen lesen"];
+  d3 [shape=diamond, style=filled, fillcolor="#fff4d6", label="Name lesbar?"];
+  d4 [shape=diamond, style=filled, fillcolor="#fff4d6", label="Zeit >= cutoff?"];
+  wk [shape=box, style=filled, fillcolor="#ffffff", label="Woche = ISO-Jahr-Woche des Datums\n(z. B. 2026-W35)"];
+  d5 [shape=diamond, style=filled, fillcolor="#fff4d6", label="für die Woche schon ein\nBackup behalten?"];
+  keep [shape=box, style=filled, fillcolor="#ffffff", label="Verzeichnis als das zu\nbehaltende merken"];
+  rm [shape=box, style=filled, fillcolor="#ffffff", label="rm -rf Verzeichnis,\nLöschung loggen"];
+  e [shape=box, style="rounded,filled", fillcolor="#dfe9f7", label="Ende"];
+  s -> d1;
+  d1 -> cut [label="ja"];
+  d1 -> w [label="nein"];
+  w -> e;
+  cut -> ls;
+  ls -> d2;
+  d2 -> parse [label="ja"];
+  d2 -> e [label="nein"];
+  parse -> d3;
+  d3 -> d4 [label="ja"];
+  d4 -> wk [label="nein"];
+  wk -> d5;
+  d5 -> keep [label="nein"];
+  d5 -> rm [label="ja"];
+  d3 -> d2 [label="nein", constraint=false];
+  d4 -> d2 [label="ja (behalten)", constraint=false];
+  keep -> d2 [constraint=false];
+  rm -> d2 [constraint=false];
+}

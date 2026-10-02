@@ -1,0 +1,35 @@
+digraph G {
+  graph [rankdir=TB, nodesep=0.45, ranksep=0.32, fontname="DejaVu Sans", labelloc=t, fontsize=14, label="PAP 4: -x, systemd-Units aktualisieren", pad=0.3];
+  node [fontname="DejaVu Sans", fontsize=11, margin="0.16,0.08"];
+  edge [fontname="DejaVu Sans", fontsize=10];
+  s [shape=box, style="rounded,filled", fillcolor="#dfe9f7", label="-x (Konfiguration bereits geladen)"];
+  gen [shape=box, style=filled, fillcolor="#ffffff", label="func_saveSystemdUnitsToTmp\n(erzeugt beide Units in /tmp/minibak)"];
+  d1 [shape=diamond, style=filled, fillcolor="#fff4d6", label="minibak.service weicht von\ninstallierter Unit ab?"];
+  c1 [shape=box, style=filled, fillcolor="#ffffff", label="installierten Service ersetzen,\ntemporäre Kopie löschen"];
+  d2 [shape=diamond, style=filled, fillcolor="#fff4d6", label="minibak.timer weicht von\ninstallierter Unit ab?"];
+  c2 [shape=box, style=filled, fillcolor="#ffffff", label="installierten Timer ersetzen,\ntemporäre Kopie löschen"];
+  ok [shape=diamond, style=filled, fillcolor="#fff4d6", label="Kopieren erfolgreich?"];
+  err [shape=parallelogram, style=filled, fillcolor="#e6f4e6", label="Fehlermeldung,\nLog-Eintrag"];
+  e1 [shape=box, style="rounded,filled", fillcolor="#dfe9f7", label="Ende (Exit 1)"];
+  rl [shape=box, style=filled, fillcolor="#ffffff", label="systemctl daemon-reload"];
+  d3 [shape=diamond, style=filled, fillcolor="#fff4d6", label="bool_timerEnabled = true?"];
+  en [shape=box, style=filled, fillcolor="#ffffff", label="systemctl enable --now minibak.timer\nsystemctl restart minibak.timer"];
+  di [shape=box, style=filled, fillcolor="#ffffff", label="systemctl disable --now minibak.timer"];
+  e0 [shape=box, style="rounded,filled", fillcolor="#dfe9f7", label="Ende (Exit 0, kein Backup)"];
+  s -> gen;
+  gen -> d1;
+  d1 -> c1 [label="ja"];
+  d1 -> d2 [label="nein"];
+  c1 -> ok;
+  ok -> d2 [label="ja"];
+  ok -> err [label="nein"];
+  d2 -> c2 [label="ja"];
+  d2 -> rl [label="nein"];
+  c2 -> rl;
+  err -> e1;
+  rl -> d3;
+  d3 -> en [label="ja"];
+  d3 -> di [label="nein"];
+  en -> e0;
+  di -> e0;
+}

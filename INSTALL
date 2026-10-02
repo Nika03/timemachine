@@ -1,0 +1,47 @@
+MINIBAK - SHORT INSTALLATION GUIDE
+==================================
+(Full documentation: README.md)
+
+REQUIREMENTS
+  - Debian or Ubuntu with systemd (tested on Debian 13)
+  - Root access (the scripts ask for sudo themselves)
+  - Internet or local mirror for rsync (installed automatically if missing)
+  - The files install.sh, minibak.sh and conf in ONE directory
+
+1. CONFIGURE
+     nano conf
+   Set at least:
+     dir_src="/path/to/back/up"
+     dir_dest="/path/for/the/backups"     (must not be inside dir_src)
+     bool_timerEnabled=true               (true = scheduled backups, false = manual only)
+   Optional: dir_log (default /var/log), int_keepFullWeeks (default 4)
+
+2. INSTALL
+     chmod +x install.sh
+     ./install.sh
+   Read the list of changes and answer "y". Everything is also written to
+   install.log. Re-running the installer overwrites /etc/minibak.conf.
+
+3. CHECK
+     ls -l /usr/bin/minibak /etc/minibak.conf /etc/systemd/system/minibak.*
+     systemctl list-timers minibak.timer      (next run: 00:00 / 12:00)
+
+4. FIRST BACKUP
+     minibak -c default
+     ls <dir_dest>                            (a directory backup_YYYY-MM-DD_hh-mm-ss)
+
+5. DAY-TO-DAY
+     minibak -c default                       run a backup now
+     minibak -c default -x                    apply changes of the timer/bool_timerEnabled
+                                              made in /etc/minibak.conf (no backup is made)
+     less /var/log/minibak.log                log
+     journalctl -u minibak.service            output of scheduled runs
+     minibak -h                               help
+
+6. RESTORE
+     rsync -aH <dir_dest>/backup_<timestamp>/<name of dir_src>/ /restore/target/
+
+7. UNINSTALL
+     ./install.sh uninstall
+   Four optional questions (all default to "no"): remove rsync, delete logs,
+   delete configuration, clear /tmp/minibak. The backups themselves are never deleted.

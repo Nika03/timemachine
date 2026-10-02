@@ -1,0 +1,33 @@
+digraph G {
+  graph [rankdir=TB, nodesep=0.45, ranksep=0.32, fontname="DejaVu Sans", labelloc=t, fontsize=14, label="PAP 3: -c, Konfiguration laden", pad=0.3];
+  node [fontname="DejaVu Sans", fontsize=11, margin="0.16,0.08"];
+  edge [fontname="DejaVu Sans", fontsize=10];
+  s [shape=box, style="rounded,filled", fillcolor="#dfe9f7", label="-c <Argument>"];
+  d1 [shape=diamond, style=filled, fillcolor="#fff4d6", label="Argument = \"default\"?"];
+  od [shape=box, style=filled, fillcolor="#ffffff", label="Datei = /etc/minibak.conf"];
+  d2 [shape=diamond, style=filled, fillcolor="#fff4d6", label="Argument leer?"];
+  oc [shape=box, style=filled, fillcolor="#ffffff", label="Datei = Argument"];
+  d3 [shape=diamond, style=filled, fillcolor="#fff4d6", label="Datei vorhanden?"];
+  err [shape=parallelogram, style=filled, fillcolor="#e6f4e6", label="Fehlermeldung,\nLog-Eintrag"];
+  e1 [shape=box, style="rounded,filled", fillcolor="#dfe9f7", label="Ende (Exit 1)"];
+  src [shape=box, style=filled, fillcolor="#ffffff", label="Datei einlesen (source)\n(liefert dir_src, dir_dest, dir_log,\nbool_timerEnabled, int_keepFullWeeks, Unit-Funktion)"];
+  d4 [shape=diamond, style=filled, fillcolor="#fff4d6", label="dir_log vorhanden?"];
+  fb [shape=box, style=filled, fillcolor="#ffffff", label="Warnung, dir_log = /var/log"];
+  mv [shape=box, style=filled, fillcolor="#ffffff", label="temporäres Log an dir_log/minibak.log anhängen,\ntemporäres Log löschen"];
+  ret [shape=box, style="rounded,filled", fillcolor="#dfe9f7", label="Zurück zur Optionsschleife"];
+  s -> d1;
+  d1 -> od [label="ja"];
+  d1 -> d2 [label="nein"];
+  d2 -> err [label="ja"];
+  d2 -> oc [label="nein"];
+  od -> d3;
+  oc -> d3;
+  d3 -> src [label="ja"];
+  d3 -> err [label="nein"];
+  err -> e1;
+  src -> d4;
+  d4 -> mv [label="ja"];
+  d4 -> fb [label="nein"];
+  fb -> mv;
+  mv -> ret;
+}

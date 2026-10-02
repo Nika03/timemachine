@@ -41,7 +41,7 @@ read -d '' text_introRemoval << EOT
 
 Welcome to the removal option of the installation script for the Minibak backup script.
 Just like for the installation, SuperUser privileges are needed to proceed.
-If ran as user, sudo will be invoked to provide privileged. 
+If ran as user, sudo will be invoked to provide the privileges. 
 
 Following changes to your system will be undone:
 
@@ -201,7 +201,7 @@ if [[ -z $1 || $1 != "uninstall" ]]
 				bool_removeConfig=true
 		fi
 
-		if [[ $(read -r -p "Would you like to clear any remaning data generated from this or the minibak script in /tmp? (y/N) : " x; echo $x) = "y" ]]
+		if [[ $(read -r -p "Would you like to clear any remaining data generated from this or the minibak script in /tmp? (y/N) : " x; echo $x) = "y" ]]
 			then
 				bool_clearTmp=true
 		fi
@@ -217,7 +217,7 @@ if [[ -z $1 || $1 != "uninstall" ]]
 						echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a ./uninstall.log
 				fi
 			else
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] File /usr/bin/minibak doesn't exit" | tee -a ./uninstall.log
+				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] File /usr/bin/minibak doesn't exist" | tee -a ./uninstall.log
 		fi
 
 		# timer goes before the service, otherwise it could just start a new job while this is running
@@ -297,7 +297,7 @@ if [[ -z $1 || $1 != "uninstall" ]]
 		# optional leftovers - only if the user said yes earlier
 		if [[ $bool_uninstallRsync == true ]]
 			then
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of rsync has been started" | tee -a ./uninstall.log
+				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUTION] Removal of rsync has been started" | tee -a ./uninstall.log
 				apt-get -y -q=2 remove rsync 2>&1 | tee -a ./uninstall.log
 		fi
 
@@ -306,7 +306,7 @@ if [[ -z $1 || $1 != "uninstall" ]]
 				# delete default logs
 				if [[ -f /var/log/minibak.log ]]
 					then 
-						echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of minibak logs has been started" | tee -a ./uninstall.log
+						echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUTION] Removal of minibak logs has been started" | tee -a ./uninstall.log
 						if ! rm /var/log/minibak.log 2>&1 | tee -a ./uninstall.log
 							then
 								echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./uninstall.log
@@ -321,7 +321,7 @@ if [[ -z $1 || $1 != "uninstall" ]]
 		if [[ $bool_removeConfig == true ]]
 			then
 				# delete default configs
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of default configuration file has been started" | tee -a ./uninstall.log
+				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUTION] Removal of default configuration file has been started" | tee -a ./uninstall.log
 				# both files have to be there, otherwise there's nothing consistent to delete
 				if [[ -f /etc/minibak.conf && -f /etc/minibak.conf.template ]]
 					then
@@ -331,7 +331,7 @@ if [[ -z $1 || $1 != "uninstall" ]]
 							else 
 								echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Deletion of the file successful" | tee -a ./uninstall.log
 						fi
-						echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUSION] Removal of template has been started" | tee -a ./uninstall.log
+						echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [CAUTION] Removal of template has been started" | tee -a ./uninstall.log
 						if ! rm /etc/minibak.conf.template 2>&1 | tee -a ./uninstall.log
 							then
 								echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./uninstall.log

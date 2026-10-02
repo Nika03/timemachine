@@ -1,0 +1,59 @@
+digraph G {
+  graph [rankdir=TB, fontname="DejaVu Sans", labelloc=t, fontsize=14, nodesep=0.5, ranksep=0.55, pad=0.3, compound=true,
+         label="System overview: components and interaction"];
+  node [fontname="DejaVu Sans", fontsize=11, margin="0.14,0.08", shape=box, style=filled, fillcolor="#ffffff"];
+  edge [fontname="DejaVu Sans", fontsize=9.5];
+
+  adm [shape=box, style="rounded,filled", fillcolor="#dfe9f7", label="Administrator /\nsystem integrator"];
+
+  subgraph cluster_dist {
+    label="Delivery (one-time installation)"; style="rounded,dashed"; color="#888888"; fontname="DejaVu Sans"; fontsize=11;
+    inst [label="install.sh"];
+    srcconf [shape=note, label="conf\n(default config +\nunit generator function)"];
+    srcbak [shape=note, label="minibak.sh"];
+  }
+
+  subgraph cluster_sys {
+    label="Target system (Debian/Ubuntu with systemd)"; style="rounded"; color="#4a6fa5"; fontname="DejaVu Sans"; fontsize=11;
+    bin [fillcolor="#f3e6f7", label="/usr/bin/minibak
+(backup script)"];
+    cfg [shape=note, label="/etc/minibak.conf
+(+ .template)"];
+    timer [fillcolor="#fff4d6", label="minibak.timer
+(systemd timer,
+00:00 / 12:00)"];
+    svc [fillcolor="#fff4d6", label="minibak.service
+(Type=oneshot)"];
+    rsync [fillcolor="#e6f4e6", label="rsync
+-aH --link-dest"];
+    tmplog [shape=note, label="/tmp/minibak/minibak.log
+(temporary log)"];
+    log [shape=note, label="<dir_log>/minibak.log
+(default /var/log)"];
+    jr [shape=note, label="systemd journal"];
+  }
+
+  src [shape=cylinder, fillcolor="#e8eef7", label="Source data\n(dir_src)"];
+  dest [shape=cylinder, fillcolor="#e8eef7", label="Backup storage (dir_dest)\nbackup_YYYY-MM-DD_hh-mm-ss/\nhard links between snapshots"];
+
+  adm -> inst [label="1. runs"];
+  inst -> bin [label="copies"];
+  inst -> cfg [label="copies (mode 644)"];
+  inst -> timer [label="generates + installs\nunits (from conf)"];
+  inst -> svc;
+  srcbak -> inst [style=dashed, arrowhead=none];
+  srcconf -> inst [style=dashed, arrowhead=none];
+  adm -> bin [label="2. manual run:\nminibak -c default | -s/-d | -x"];
+  timer -> svc [label="triggers"];
+  svc -> bin [label="ExecStart:
+minibak -c /etc/minibak.conf"];
+  svc -> jr [style=dashed, label="stdout/stderr"];
+  bin -> cfg [label="source"];
+  bin -> rsync [label="calls"];
+  rsync -> src [dir=back, label="reads"];
+  rsync -> dest [label="copies changed files,\nhard-links the rest"];
+  bin -> dest [style=dashed, label="retention:\ndeletes old snapshots"];
+  bin -> tmplog [label="writes"];
+  tmplog -> log [label="appended after\nconfig is loaded"];
+  bin -> timer [style=dotted, label="-x: regenerates and\nreplaces the units", constraint=false];
+}

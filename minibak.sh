@@ -130,7 +130,7 @@ while getopts ":s:d:vhHc:x" flag; do
 							echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Config in $OPTARG not found. Exit code 1" >> /tmp/minibak/minibak.log
 							exit 1
 						else
-							# existance check
+							# existence check
 							if [[ -f $OPTARG ]]
 								then
 									# if exists, import the values for vars from config
@@ -149,7 +149,7 @@ while getopts ":s:d:vhHc:x" flag; do
 											rm /tmp/minibak/minibak.log
 									fi
 								else
-									# config file doesn't exit
+									# config file doesn't exist
 									echo "The config file in the provided location does not exist in location $OPTARG! - Exiting..." >&2
 									echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Custom configuration file doesn't exist. Exit code 1." >> /tmp/minibak/minibak.log
 									exit 1
@@ -169,7 +169,7 @@ while getopts ":s:d:vhHc:x" flag; do
 					# files are identical
 					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] No changes to minibak.service have been made" | tee -a $dir_log/minibak.log
 				else
-					# there's a difference or an error occured
+					# there's a difference or an error occurred
 					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Changes have been made, replacing the old units" | tee -a $dir_log/minibak.log
 					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Replacing the minibak.service unit in /etc/systemd/system with /tmp/minibak" | tee -a $dir_log/minibak.log
 					cp -r /tmp/minibak/minibak.service /etc/systemd/system/minibak.service
@@ -257,7 +257,7 @@ if [[ -z $dir_src ]]
 			fi
 	else
 		# source dir doesn't exist
-		echo "Source directory <$dir_src> does not exit! - Exiting..." >&2
+		echo "Source directory <$dir_src> does not exist! - Exiting..." >&2
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Source directory doesn't exist. Exit code 1" >> $dir_log/minibak.log
 		exit 1
 fi
@@ -438,7 +438,7 @@ if [[ -z "$(ls $dir_dest)" ]]
 	else
 		# find last latest backup and set that as the --link-dest
 		echo "Searching for last latest backup to compare with latest changes"
-		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Searching for lastest directory to compare changes" >> $dir_log/minibak.log
+		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Searching for latest directory to compare changes" >> $dir_log/minibak.log
 		echo "lastBackup = $lastBackup"
 		echo "currentBackupDir = $currentBackupDir"
 		mkdir $currentBackupDir
