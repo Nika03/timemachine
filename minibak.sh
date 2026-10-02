@@ -220,7 +220,9 @@ while getopts ":s:d:vhHc:x" flag; do
 				else
 					systemctl disable minibak.timer
 					echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been disabled" | tee -a $dir_log/minibak.log
-			fi ;;
+			fi 
+			
+			exit 0;;
 		# an option that needs an argument got none (for example -s alone)
 		:) echo "Error: option -$OPTARG needs an argument" >&2; echo "$text_help" >&2; exit 1 ;;
 		# an option that doesn't exist

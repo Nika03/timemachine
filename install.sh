@@ -108,6 +108,9 @@ if [[ -z $1 || $1 != "uninstall" ]]
 				exit 1
 		fi
 
+		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Changing mode for config files to 644" | tee -a ./install.log
+		chmod 644 /etc/minibak.conf /etc/minibak.conf.template
+
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Fetching data from ./conf" | tee -a ./install.log
 		# import the values (and the unit generating function) from the config that has just been copied
 		source ./conf
@@ -139,8 +142,8 @@ if [[ -z $1 || $1 != "uninstall" ]]
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." 2>&1 | tee -a ./install.log
 				exit 1
 			else
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Copy job finished"
-				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Removing the temporary copy of minibak.timer"
+				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [SUCCESS] Copy job finished" 2>&1 | tee -a ./install.log
+				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Removing the temporary copy of minibak.timer" 2>&1 | tee -a ./install.log
 				if ! rm /tmp/minibak/minibak.timer 2>&1 | tee -a ./install.log
 					then
 						echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [WARNING] Deletion of the file failed" | tee -a ./install.log
@@ -156,10 +159,10 @@ if [[ -z $1 || $1 != "uninstall" ]]
 		# bool_timerEnabled comes from the config - enabled = timer starts on boot, disabled = only manual runs
 		if [[ $bool_timerEnabled == true ]]
 			then
-				systemctl enable minibak.timer
+				systemctl enable --now minibak.timer
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been enabled" | tee -a ./install.log
 			else
-				systemctl disable minibak.timer
+				systemctl disable --now minibak.timer
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Scheduled execution has been disabled" | tee -a ./install.log
 		fi
 
@@ -246,8 +249,8 @@ if [[ -z $1 || $1 != "uninstall" ]]
 					done
 				if systemctl is-enabled minibak.service
 					then
-						echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Disabling and stopping minibak.service" | tee -a ./uninstall.log
-						systemctl disable --now minibak.service
+						echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Stopping minibak.service" | tee -a ./uninstall.log
+						systemctl stop minibak.service
 				fi
 			else
 				# warning - unit doesn't exist, execution proceeds regardless
