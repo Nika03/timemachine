@@ -60,7 +60,7 @@ set -o pipefail		# this enables pipefail, which will make the exit status of a p
 
 if [[ -z $1 || $1 != "uninstall" ]]
 	then 	# do installation
-		echo $text_introInstallation
+		echo "$text_introInstallation"
 
 		if [[ $(read -r -p "Would you like to continue? (y/n) : " x; echo $x)  != "y" ]]
 			then
@@ -89,6 +89,12 @@ if [[ -z $1 || $1 != "uninstall" ]]
 				echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [ERROR] Copy job failed. Exiting..." | tee -a ./install.log
 				exit 1
 		fi
+
+		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Adding execute permissions to the copy" | tee -a ./install.log
+		chmod +x /usr/bin/minibak | tee -a ./install.log
+
+		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Reloading the systemd daemon" | tee -a ./install.log
+		systemctl daemon-reload | tee -a ./install.log
 
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Copying the config template into /etc/minibak.conf.template" | tee -a ./install.log
 		if ! cp ./conf /etc/minibak.conf.template 2>&1 | tee -a ./install.log
@@ -148,7 +154,7 @@ if [[ -z $1 || $1 != "uninstall" ]]
 		echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Deinstallation has been started" >> ./uninstall.log
 
 		echo "" >> ./uninstall.log
-		echo $text_introRemoval | tee -a ./uninstall.log
+		echo "$text_introRemoval" | tee -a ./uninstall.log
 		echo "" >> ./uninstall.log
 
 		if [[ $(read -r -p "Would you like to continue? (y/N) : " x; echo $x) != "y" ]]

@@ -7,7 +7,7 @@
 
 	dir_src=""				# source data to backup
 	dir_dest=""				# destination where the data will be backed up
-	bool_verboseMode=false			# talk to me baby
+	#bool_verboseMode=false			# talk to me baby
 	bool_timerEnabled=false			# enable/disable scheduled execs
 	dir_log="/var/log"			# default directory for log files
 	dir_defaultConfig="/etc"		# default config dir
@@ -31,7 +31,7 @@ Options:
 -d <dir>	Destination directory where the data will be saved
 -v		Verbose; Debug messages of what's being done
 -h		Show this help message
--h config	Show help for configuration file syntax
+-H		Show help for configuration file syntax
 -c <file>	Location to a config file
 -c default	Execute with the default config (located at /etc/minibak.conf)
 -x		Compare the current systemd service and timer with the one in the configuration.
@@ -48,7 +48,7 @@ It is recommended to make a copy of minibak.conf in another directory, and use t
 Variables:
 dir_src=<dir>			Source directory to be backed up, same as -s
 dir_dest=<dir>			Destination directory where the data from source (dir_src) will be saved, same as -d
-bool_schedulerEnabled=<0 or 1>	Enable/Disable scheduled backup of source (dir_src) files
+bool_schedulerEnabled=<true/false>	Enable/Disable scheduled backup of source (dir_src) files
 dir_log=<dir>			Directory where the logs will be saved. By default, it's /var/log
  
 EOT
@@ -74,24 +74,16 @@ echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] $0 started" >> /tmp/minibak/minibak
 # i should make it so that the installer also uses the function from config instead of a generic setting 
 
 # option handler along with arguments for options
-while getopts ":s:d:vh:c:x" flag; do
+while getopts ":s:d:vhHc:x" flag; do
 	#echo "flag -$flag, arg $OPTARG";
 	case $flag in
-		s) dir_src=$OPTARG ;;
-		d) dir_dest=$OPTARG ;;
-		v) bool_verboseMode=1 ;;
-		h)	if [[ $OPTARG != "config" ]]	# if arg is invalid or empty, it will jump to \?) which has the help text
-				then
-					echo "$text_configHelp" >&2
-					exit 0
-			fi
-
-			if [[ -z $OPTARG ]]
-				then 
-					echo "$text_help" >&2
-					exit 0
-			fi ;;
-
+		s)	dir_src=$OPTARG ;;
+		d)	dir_dest=$OPTARG ;;
+		v)	bool_verboseMode=1 ;;
+		h)	echo "$text_help" >&2
+			exit 0 ;;
+		H)	echo "$text_configHelp" >&2
+			exit 0 ;;
 		c) 	echo "$(date +"%Y-%m-%d %H:%M:%S:%N") [INFO] Option -c has been called" >> /tmp/minibak/minibak.log
 			if [[ $OPTARG = "default" ]]
 				then
